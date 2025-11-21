@@ -124,23 +124,6 @@ class Helper(object):
         return str(val).strip()
 
     @staticmethod
-    def gather_audio_files(path: Path) -> t.List[FileNormalizer]:
-        """
-        Gather audio files directly under the album path and in immediate subdirectories.
-        :param path: Path to the album directory.
-        :return: List of FileNormalizer instances for audio files found (direct children + one level deep).
-        """
-        # Gather audio files directly under path and in immediate subdirs (ignore nested albums)
-        files: t.List[FileNormalizer] = [FileNormalizer(p) for p in path.iterdir() if Helper.is_audio_file(p)]
-        # Also include audio files in immediate subdirs (commonly disc subdirs)
-        for child in path.iterdir():
-            if child.is_dir():
-                files_subdir = [FileNormalizer(p) for p in child.iterdir() if Helper.is_audio_file(p)]
-                files += files_subdir
-        logger.debug(f"Found {len(files)} audio files in {path}: {files}")
-        return files
-
-    @staticmethod
     def build_album_dir_name(
             artist: str,
             year: t.Optional[str],
@@ -260,7 +243,7 @@ class FileNormalizer(object):
         if mut is None:
             return None
         tags = mut.tags
-        logger.debug(f"Tags for file {self._path} found through mutagen: {tags}")
+        logger.debug(f"Tags for file '{self._path}' found through mutagen: {tags}")
         if not tags:
             return None
 
@@ -408,30 +391,38 @@ class AlbumNormalizer(object):
         pass
 
     ### PROPERTIES
-    @property
+    @cached_property
     def file_songs(self) -> t.List[FileNormalizer]:
-        return Helper.gather_audio_files(self._path)
+        return self.gather_audio_files()
 
-    @file_songs.setter
-    def file_songs(self, _):
-        pass
-
-    def process_album(self, dry_run: bool = False) -> bool:
+    def gather_audio_files(self) -> t.List[FileNormalizer]:
         """
-        Normalize the content of an album directory.
+        Gather audio files directly under the album path and in immediate subdirectories.
+        :return: List of FileNormalizer instances for audio files found (direct children + one level deep).
+        """
+        # Gather audio files directly under path and in immediate subdirs (ignore nested albums)
+        files: t.List[FileNormalizer] = [FileNormalizer(p) for p in self._path.iterdir() if Helper.is_audio_file(p)]
+        # Also include audio files in immediate subdirs (commonly disc subdirs)
+        for child in self._path.iterdir():
+            if child.is_dir():
+                files_subdir = [FileNormalizer(p) for p in child.iterdir() if Helper.is_audio_file(p)]
+                files += files_subdir
+        logger.debug(f"Found {len(files)} audio files in {self._path}: {files}")
+        return files
+
+    def get_new_album_name(self, dry_run: bool = False) -> Path:
+        """
+        Get the album path where the songs must be moved thanks to the song tags.
         :param dry_run: If True, only log the action without performing it.
-        :return: True if it went successfully is, False otherwise.
+        :return: new album path.
         """
 
         logger.info(f"Processing album dir: {self._path}")
 
-        files = self.file_songs
+        if not self.file_songs:
+            logger.error(f"No audio files found in {self._path}")
 
-        if not files:
-            logger.debug(f"No audio files found in {self._path}")
-            return False
-
-        tag_samples = [p.tags for p in files]
+        tag_samples = [p.tags for p in self.file_songs]
         # Determine album-level metadata by majority / fallbacks
         artist = None
         album = None
@@ -480,13 +471,20 @@ class AlbumNormalizer(object):
                         renamed_album_dir = self._path
         else:
             renamed_album_dir = self._path
+        return renamed_album_dir
 
-        # Re-scan files under renamed_album_dir for up-to-date list
-        files = Helper.gather_audio_files(renamed_album_dir)
+    def process_album(self, dry_run: bool = False) -> bool:
+        """
+        Normalize the content of an album directory.
+        :param dry_run: If True, only log the action without performing it.
+        :return: True if it went successfully is, False otherwise.
+        """
+
+        new_album = AlbumNormalizer(self.get_new_album_name(dry_run))
 
         # Determine disc set after reading tags (some files may not have disc tags)
         disc_map: dict[FileNormalizer, tuple[int, int, dict[str, t.Any]]] = {}  # mapping from file -> (disc, track, tags)
-        for file in files:
+        for file in new_album.file_songs:
             tags = file.tags
             disc = tags.get('disc') or 1
             track = tags.get('track') or 0
@@ -500,23 +498,24 @@ class AlbumNormalizer(object):
         result = []
         for file, (disc, track, tags) in disc_map.items():
             track_num = Helper.padded(track, 2)
-            filename = f"{track_num}. {tags.get('artist') or artist} - {tags.get('title') or file.path.stem}{file.path.suffix}"
+            filename = f"{track_num}. {tags.get('artist')} - {tags.get('title') or file.path.stem}{file.path.suffix}"
             # Sanitize filename
             filename = Helper.sanitize_filename(filename)
             # For multi-disc: create per-disc subdir
             if multi_disc:
                 filename = f"{disc}/{discs_present} {filename}"
-                target_dir = renamed_album_dir / f"Disc {disc}"
+                target_dir = new_album.path / f"Disc {disc}"
             else:
-                target_dir = renamed_album_dir
+                target_dir = new_album.path
             target_path = target_dir / filename
-            # If current file already at target path, skip
-            if file.path.resolve() == target_path.resolve():
-                logger.debug(f"File already at desired path: {file.path}")
-                continue
             # If target exists and is same content, skip
             if target_path.exists() and SKIP_EXISTING:
                 logger.info(f"Skipping move because target exists and SKIP_EXISTING=yes: {target_path}")
+                for old_file in self.file_songs:
+                    if old_file.tags["title"] == file.tags["title"] and old_file.tags["track"] == file.tags["track"]:
+                        logger.debug(f"Removing duplicate file: {old_file.path}")
+                        os.remove(old_file.path)
+                        break
                 continue
             # If neither, tries to create the file
             Helper.ensure_dir(target_dir, dry_run=dry_run)
@@ -525,7 +524,11 @@ class AlbumNormalizer(object):
             except Exception as e:
                 logger.error(f"Failed to move {file.path} -> {target_path}: {e}")
                 result.append(False)
-        return any(result)
+        else:
+            if self._path.exists() and not any(self._path.iterdir()):
+                logger.debug(f"Removing {self._path} since it's empty.")
+                shutil.rmtree(self._path)
+            return any(result)
 
 
 class Normalizer(object):
