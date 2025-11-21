@@ -27,7 +27,7 @@ services:
       - "${PARENT_OF_DEST_PATH}:/data:rw"
     environment:
       # inside the container the target album path becomes /data/<DEST_SUBPATH>
-      - DEST_DIR=/data/${DEST_SUBPATH}
+      - SRC_DIR=/data/${DEST_SUBPATH}
       - DRY_RUN=${DRY_RUN:-no}
       # optional: pass SKIP_EXISTING if you want to control it from the host
       - SKIP_EXISTING=${SKIP_EXISTING:-yes}

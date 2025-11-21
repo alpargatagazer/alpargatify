@@ -47,14 +47,13 @@ import sys
 import typing as t
 import unicodedata
 from pathlib import Path
-from typing import Final
 
 from mutagen import File as MutagenFile
 
 
-AUDIO_EXTS: Final[tuple] = ('.m4a', '.mp4', '.mp3', '.flac', '.wav', '.aac', '.ogg', '.opus')
+AUDIO_EXTS: t.Final[tuple] = ('.m4a', '.mp4', '.mp3', '.flac', '.wav', '.aac', '.ogg', '.opus')
 # Environment-controlled behavior
-SKIP_EXISTING: Final[bool] = True if os.environ.get('SKIP_EXISTING', 'yes').lower() == "yes" else False
+SKIP_EXISTING: t.Final[bool] = True if os.environ.get('SKIP_EXISTING', 'yes').lower() == "yes" else False
 # Helpers
 logger = logging.getLogger('normalize')
 
@@ -70,27 +69,6 @@ class Helper(object):
         pass
 
     @staticmethod
-    def get_path(path: str) -> Path:
-        """
-        Get Path object from path.
-        :param path: string to locate path.
-        :return: Path object from path.
-        """
-        return Path(path).resolve()
-
-    @staticmethod
-    def dir_exists(path: Path) -> bool:
-        """
-        Check if a directory exists.
-        :param path: Path to the directory to check.
-        :return: True if exists, False otherwise.
-        """
-        if not path.exists() or not path.is_dir():
-            return False
-        else:
-            return True
-
-    @staticmethod
     def is_audio_file(path: Path) -> bool:
         """
         Check if a file is an audio file.
@@ -99,17 +77,52 @@ class Helper(object):
         """
         return path.is_file() and path.suffix.lower() in AUDIO_EXTS
 
-    @staticmethod
-    def find_album_dirs(root: Path) -> t.List[Path]:
+
+class AlbumNormalizer(object):
+
+    def __init__(self, path: str):
+        self._path = Path(path).resolve()
+        if not self.dir_exists():
+            logger.error(f"Directory does not exist or is not a directory: {self._path}")
+            sys.exit(2)
+        self._album_dirs = self._find_album_dirs()
+
+    ### PROPERTIES
+    @property
+    def path(self) -> Path:
+        return self._path
+
+    @path.setter
+    def path(self, path: str):
+        self._path = Path(path).resolve()
+
+    @property
+    def album_dirs(self) -> t.List[Path]:
+        return self._album_dirs
+
+    @album_dirs.setter
+    def album_dirs(self, _):
+        pass
+
+    def dir_exists(self) -> bool:
+        """
+        Check if a directory exists.
+        :return: True if exists, False otherwise.
+        """
+        if not self._path.exists() or not self._path.is_dir():
+            return False
+        else:
+            return True
+
+    def _find_album_dirs(self) -> t.List[Path]:
         """
         Return list of directories that contain at least one audio file.
-        This returns directories anywhere under root (including root itself) that
+        This returns directories anywhere under self._path (including root itself) that
         contain audio files directly (i.e. not only via subdirectories).
-        :param root: Path to the directory to search for audio files.
         :return: list of directories that contain at least one audio file.
         """
         albums = []
-        for dirpath, _, filenames in os.walk(root):
+        for dirpath, _, filenames in os.walk(self._path):
             p = Path(dirpath)
             for fn in filenames:
                 if Path(fn).suffix.lower() in AUDIO_EXTS:
@@ -118,11 +131,20 @@ class Helper(object):
                     break
             else:
                 logger.debug(f"{p} is not an album directory")
+        logger.info(f"Found {len(albums)} album directories under {self._path}")
         return albums
 
-
-class Normalizer(object):
-    pass
+    def process_dirs(self, dry_run: bool = False) -> None:
+        """
+        Process all directory-albums recursively.
+        :param dry_run: don't apply anything
+        :return: None
+        """
+        for ad in sorted(self.album_dirs):
+            try:
+                process_album(ad, dry_run=dry_run)
+            except Exception as e:
+                logger.exception(f"Error processing album {ad}: {e}")
 
 
 def safe_text(val: t.Any) -> str:
@@ -311,7 +333,7 @@ def move_or_rename(src: Path, dst: Path, dry_run: bool = False):
     return True
 
 
-def process_album(album_path: Path, dest_root: Path, dry_run: bool = False):
+def process_album(album_path: Path, dry_run: bool = False):
     logger.info(f"Processing album dir: {album_path}")
     # Gather audio files directly under album_path and in immediate subdirs (ignore nested albums)
     files = [p for p in album_path.iterdir() if Helper.is_audio_file(p)]
@@ -443,7 +465,6 @@ def sanitize_filename(name: str) -> str:
 def main(argv=None):
     ap = argparse.ArgumentParser(description='Normalize album directories and track filenames')
     ap.add_argument('--source', required=True, help='Source root to scan')
-    ap.add_argument('--dest', required=True, help='Destination root (unused: kept for compatibility)')
     ap.add_argument('--dry-run', action='store_true', help='Do not perform writes, only show what would happen')
     ap.add_argument('--verbose', action='store_true', help='Verbose logging')
     args = ap.parse_args(argv)
@@ -451,20 +472,8 @@ def main(argv=None):
     level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(level=level, format='%(levelname)s: %(message)s')
 
-    source = Helper.get_path(args.source)
-    dest = Helper.get_path(args.dest)
-    if not Helper.dir_exists(source):
-        logger.error(f"Source does not exist or is not a directory: {source}")
-        sys.exit(2)
-
-    album_dirs = Helper.find_album_dirs(source)
-    logger.info(f"Found {len(album_dirs)} album directories under {source}")
-    # Process each album directory
-    for ad in sorted(album_dirs):
-        try:
-            process_album(ad, dest, dry_run=args.dry_run)
-        except Exception as e:
-            logger.exception(f"Error processing album {ad}: {e}")
+    normalizer = AlbumNormalizer(args.source)
+    normalizer.process_dirs()
 
 
 if __name__ == '__main__':
