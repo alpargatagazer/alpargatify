@@ -89,18 +89,6 @@ class Helper(object):
         return path.is_file() and path.suffix.lower() in AUDIO_EXTS
 
     @staticmethod
-    def dir_exists(path: Path) -> bool:
-        """
-        Check if a directory exists.
-        :param path: Path to the directory to check.
-        :return: True if exists, False otherwise.
-        """
-        if not path.exists() or not path.is_dir():
-            return False
-        else:
-            return True
-
-    @staticmethod
     def safe_text(val: t.Any) -> str:
         """
         Convert a value into a safe, stripped string.
@@ -210,9 +198,9 @@ class FileNormalizer(object):
 
     def __init__(self, path: Path):
         self._path = path
-        if not path.exists() or not path.is_file():
+        if not path.is_file():
             logger.error(f"File does not exist or is not a file: {self._path}")
-            sys.exit(2)
+            raise FileNotFoundError(self._path)
 
     ### PROPERTIES
     @property
@@ -226,8 +214,6 @@ class FileNormalizer(object):
     @cached_property
     def mutagen(self) -> FileType:
         mut = MutagenFile(str(self._path), easy=False)
-        if mut is not None and mut.tags:
-            logger.debug(f"Tags for file '{self._path}' found through mutagen: {mut}")
         return mut
 
     @cached_property
@@ -378,7 +364,7 @@ class AlbumNormalizer(object):
 
     def __init__(self, path: Path):
         self._path = path
-        if not Helper.dir_exists(self._path):
+        if not self._path.is_dir():
             logger.error(f"Directory does not exist or is not a directory: {self._path}")
             sys.exit(2)
 
@@ -408,7 +394,7 @@ class AlbumNormalizer(object):
             if child.is_dir():
                 files_subdir = [FileNormalizer(p) for p in child.iterdir() if Helper.is_audio_file(p)]
                 files += files_subdir
-        logger.debug(f"Found {len(files)} audio files in {self._path}: {files}")
+        logger.debug(f"Found {len(files)} audio files in {self._path}: {(f.path.name for f in files)}")
         return files
 
     def get_new_album_name(self, dry_run: bool = False) -> Path:
@@ -539,7 +525,7 @@ class Normalizer(object):
 
     def __init__(self, path: str):
         self._path = Path(path).resolve()
-        if not Helper.dir_exists(self._path):
+        if not self._path.is_dir():
             logger.error(f"Directory does not exist or is not a directory: {self._path}")
             sys.exit(2)
         self._album_dirs = self._find_album_dirs()
