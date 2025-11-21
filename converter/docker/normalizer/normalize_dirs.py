@@ -124,6 +124,23 @@ class Helper(object):
         return str(val).strip()
 
     @staticmethod
+    def gather_audio_files(path: Path) -> t.List[FileNormalizer]:
+        """
+        Gather audio files directly under the album path and in immediate subdirectories.
+        :param path: Path to the album directory.
+        :return: List of FileNormalizer instances for audio files found (direct children + one level deep).
+        """
+        # Gather audio files directly under path and in immediate subdirs (ignore nested albums)
+        files: t.List[FileNormalizer] = [FileNormalizer(p) for p in path.iterdir() if Helper.is_audio_file(p)]
+        # Also include audio files in immediate subdirs (commonly disc subdirs)
+        for child in path.iterdir():
+            if child.is_dir():
+                files_subdir = [FileNormalizer(p) for p in child.iterdir() if Helper.is_audio_file(p)]
+                files += files_subdir
+        logger.debug(f"Found {len(files)} audio files in {path}: {files}")
+        return files
+
+    @staticmethod
     def build_album_dir_name(
             artist: str,
             year: t.Optional[str],
@@ -243,7 +260,7 @@ class FileNormalizer(object):
         if mut is None:
             return None
         tags = mut.tags
-        logger.debug(f"Tags for file {self._path}: {tags}")
+        logger.debug(f"Tags for file {self._path} found through mutagen: {tags}")
         if not tags:
             return None
 
@@ -326,6 +343,9 @@ class FileNormalizer(object):
         except Exception as e:
             logger.warning(f"Failed reading tags for {self._path}: {e}")
 
+        else:
+            logger.debug(f"Successfully read tags for {self._path}: {data}")
+
         return data
 
     def move_or_rename(self, dst: Path, dry_run: bool = False) -> bool:
@@ -390,25 +410,11 @@ class AlbumNormalizer(object):
     ### PROPERTIES
     @property
     def file_songs(self) -> t.List[FileNormalizer]:
-        return self._gather_audio_files()
+        return Helper.gather_audio_files(self._path)
 
     @file_songs.setter
     def file_songs(self, _):
         pass
-
-    def _gather_audio_files(self) -> t.List[FileNormalizer]:
-        """
-        Gather audio files directly under the album path and in immediate subdirectories.
-        :return: List of FileNormalizer instances for audio files found (direct children + one level deep).
-        """
-        # Gather audio files directly under self._path and in immediate subdirs (ignore nested albums)
-        files: t.List[FileNormalizer] = [FileNormalizer(p) for p in self._path.iterdir() if Helper.is_audio_file(p)]
-        # Also include audio files in immediate subdirs (commonly disc subdirs)
-        for child in self._path.iterdir():
-            if child.is_dir():
-                files_subdir = [FileNormalizer(p) for p in child.iterdir() if Helper.is_audio_file(p)]
-                files += files_subdir
-        return files
 
     def process_album(self, dry_run: bool = False) -> bool:
         """
@@ -458,6 +464,7 @@ class AlbumNormalizer(object):
             # if target exists and is different from our source, do not clobber
             if target_album_dir.exists() and target_album_dir.resolve() != self._path.resolve():
                 logger.warning(f"Target album dir already exists, skipping rename: {target_album_dir}")
+                renamed_album_dir = target_album_dir
             else:
                 if dry_run:
                     logger.info(f"DRY RUN: would rename album dir '{self._path.name}' -> '{album_dir_name}'")
@@ -475,12 +482,7 @@ class AlbumNormalizer(object):
             renamed_album_dir = self._path
 
         # Re-scan files under renamed_album_dir for up-to-date list
-        files = [FileNormalizer(p) for p in renamed_album_dir.iterdir() if Helper.is_audio_file(p)]
-        for child in renamed_album_dir.iterdir():
-            if child.is_dir():
-                for p in child.iterdir():
-                    if Helper.is_audio_file(p):
-                        files.append(FileNormalizer(p))
+        files = Helper.gather_audio_files(renamed_album_dir)
 
         # Determine disc set after reading tags (some files may not have disc tags)
         disc_map: dict[FileNormalizer, tuple[int, int, dict[str, t.Any]]] = {}  # mapping from file -> (disc, track, tags)
