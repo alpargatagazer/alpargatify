@@ -51,7 +51,18 @@ from pathlib import Path
 from mutagen import File as MutagenFile
 
 
+# Global variables
 AUDIO_EXTS: t.Final[tuple] = ('.m4a', '.mp4', '.mp3', '.flac', '.wav', '.aac', '.ogg', '.opus')
+TAG_KEYS: t.Final[dict[str, tuple]] = {
+    'artist': ('artist', '©ART', '©ARTIST', 'TPE1', 'artist'),
+    'albumartist': ('albumartist', 'aART', '©ART', 'albumartist'),
+    'album': ('album', '\u00a9alb', '©alb', 'TALB', 'album'),
+    'title': ('title', '\u00a9nam', '©nam', 'TIT2', 'title'),
+    'year': ('date', 'year', '\u00a9day', '©day', 'TDRC'),
+    'disc': ('disc', 'disk', 'disknumber', 'disk number', 'discnumber'),
+    'track': ('track', 'tracknumber', 'trkn', 'TRCK'),
+    'release_type': ('release_type', 'albumtype', 'media', 'stik', 'cpil')
+}
 # Environment-controlled behavior
 SKIP_EXISTING: t.Final[bool] = True if os.environ.get('SKIP_EXISTING', 'yes').lower() == "yes" else False
 # Helpers
@@ -77,12 +88,24 @@ class Helper(object):
         """
         return path.is_file() and path.suffix.lower() in AUDIO_EXTS
 
+    @staticmethod
+    def dir_exists(path: Path) -> bool:
+        """
+        Check if a directory exists.
+        :param path: Path to the directory to check.
+        :return: True if exists, False otherwise.
+        """
+        if not path.exists() or not path.is_dir():
+            return False
+        else:
+            return True
 
-class AlbumNormalizer(object):
+
+class Normalizer(object):
 
     def __init__(self, path: str):
         self._path = Path(path).resolve()
-        if not self.dir_exists():
+        if not Helper.dir_exists(self._path):
             logger.error(f"Directory does not exist or is not a directory: {self._path}")
             sys.exit(2)
         self._album_dirs = self._find_album_dirs()
@@ -97,24 +120,14 @@ class AlbumNormalizer(object):
         self._path = Path(path).resolve()
 
     @property
-    def album_dirs(self) -> t.List[Path]:
+    def album_dirs(self) -> t.List[AlbumNormalizer]:
         return self._album_dirs
 
     @album_dirs.setter
     def album_dirs(self, _):
         pass
 
-    def dir_exists(self) -> bool:
-        """
-        Check if a directory exists.
-        :return: True if exists, False otherwise.
-        """
-        if not self._path.exists() or not self._path.is_dir():
-            return False
-        else:
-            return True
-
-    def _find_album_dirs(self) -> t.List[Path]:
+    def _find_album_dirs(self) -> t.List[AlbumNormalizer]:
         """
         Return list of directories that contain at least one audio file.
         This returns directories anywhere under self._path (including root itself) that
@@ -127,31 +140,178 @@ class AlbumNormalizer(object):
             for fn in filenames:
                 if Path(fn).suffix.lower() in AUDIO_EXTS:
                     logger.debug(f"Found album directory: {p}")
-                    albums.append(p)
+                    albums.append(AlbumNormalizer(p))
                     break
             else:
                 logger.debug(f"{p} is not an album directory")
         logger.info(f"Found {len(albums)} album directories under {self._path}")
         return albums
 
-    def process_dirs(self, dry_run: bool = False) -> None:
+    def normalize(self, dry_run: bool = False) -> None:
         """
         Process all directory-albums recursively.
         :param dry_run: don't apply anything
         :return: None
         """
-        for ad in sorted(self.album_dirs):
+        for ad in self.album_dirs:
             try:
-                process_album(ad, dry_run=dry_run)
+                ad.process_album(dry_run=dry_run)
             except Exception as e:
                 logger.exception(f"Error processing album {ad}: {e}")
 
 
+class AlbumNormalizer(object):
+
+    def __init__(self, path: Path):
+        self._path = path
+        if not Helper.dir_exists(self._path):
+            logger.error(f"Directory does not exist or is not a directory: {self._path}")
+            sys.exit(2)
+
+    ### PROPERTIES
+    @property
+    def path(self) -> Path:
+        return self._path
+
+    @path.setter
+    def path(self, path: str):
+        self._path = Path(path).resolve()
+
+    def process_album(self, dry_run: bool = False):
+        logger.info(f"Processing album dir: {self._path}")
+        # Gather audio files directly under self._path and in immediate subdirs (ignore nested albums)
+        files = [p for p in self._path.iterdir() if Helper.is_audio_file(p)]
+        # Also include audio files in immediate subdirs (commonly disc subdirs)
+        for child in self._path.iterdir():
+            if child.is_dir():
+                for p in child.iterdir():
+                    if Helper.is_audio_file(p):
+                        files.append(p)
+        if not files:
+            logger.debug(f"No audio files found in {self._path}")
+            return
+
+        tag_samples = [read_tags(p) for p in files]
+        # Determine album-level metadata by majority / fallbacks
+        artist = None
+        album = None
+        year = None
+        release_type = None
+        discs = set()
+
+        for t in tag_samples:
+            if not artist and t.get('albumartist'):
+                artist = t.get('albumartist')
+            if not artist and t.get('artist'):
+                artist = t.get('artist')
+            if not album and t.get('album'):
+                album = t.get('album')
+            if not year and t.get('year'):
+                year = t.get('year')
+            if not release_type and t.get('release_type'):
+                release_type = t.get('release_type')
+            if t.get('disc'):
+                discs.add(int(t.get('disc')))
+            else:
+                discs.add(1)
+
+        if not artist:
+            artist = 'Unknown Artist'
+        if not album:
+            album = self._path.name
+        album_dir_name = build_album_dir_name(artist, year, album, release_type)
+
+        # If self._path is not already named like album_dir_name, attempt to rename directory
+        parent = self._path.parent
+        target_album_dir = parent / album_dir_name
+        if self._path.name != album_dir_name:
+            # if target exists and is different from our source, do not clobber
+            if target_album_dir.exists() and target_album_dir.resolve() != self._path.resolve():
+                logger.warning(f"Target album dir already exists, skipping rename: {target_album_dir}")
+            else:
+                if dry_run:
+                    logger.info(f"DRY RUN: would rename album dir '{self._path.name}' -> '{album_dir_name}'")
+                    # For DRY RUN, proceed as if renamed for downstream path calculations
+                    renamed_album_dir = target_album_dir
+                else:
+                    try:
+                        self._path.rename(target_album_dir)
+                        logger.info(f"Renamed album dir '{self._path}' -> '{target_album_dir}'")
+                        renamed_album_dir = target_album_dir
+                    except Exception as e:
+                        logger.error(f"Failed to rename album dir {self._path} -> {target_album_dir}: {e}")
+                        renamed_album_dir = self._path
+        else:
+            renamed_album_dir = self._path
+
+        # Re-scan files under renamed_album_dir for up-to-date list
+        files = [p for p in renamed_album_dir.iterdir() if Helper.is_audio_file(p)]
+        for child in renamed_album_dir.iterdir():
+            if child.is_dir():
+                for p in child.iterdir():
+                    if Helper.is_audio_file(p):
+                        files.append(p)
+
+        # Determine disc set after reading tags (some files may not have disc tags)
+        disc_map = {}  # mapping from file -> (disc, track)
+        for p in files:
+            t = read_tags(p)
+            disc = t.get('disc') or 1
+            track = t.get('track') or 0
+            disc = int(disc)
+            track = int(track)
+            disc_map[p] = (disc, track, t)
+
+        discs_present = sorted({d for d, _, _ in [v for v in disc_map.values()]})
+        multi_disc = len(discs_present) > 1
+
+        # For multi-disc: create per-disc subdir
+        for p, (disc, track, tags) in disc_map.items():
+            track_num = padded(track, 2)
+            filename = f"{track_num}. {tags.get('artist') or artist} - {tags.get('title') or p.stem}{p.suffix}"
+            # sanitize filename
+            filename = sanitize_filename(filename)
+            if multi_disc:
+                filename = f"{disc}/{discs_present} {filename}"
+                target_dir = f"{renamed_album_dir}/Disc {disc}"
+            else:
+                target_dir = renamed_album_dir
+            target_path = target_dir / filename
+            # If current file already at target path, skip
+            if p.resolve() == target_path.resolve():
+                logger.debug(f"File already at desired path: {p}")
+                continue
+            # If target exists and is same content, skip
+            if target_path.exists() and SKIP_EXISTING:
+                logger.info(f"Skipping move because target exists and SKIP_EXISTING=yes: {target_path}")
+                continue
+            ensure_dir(target_dir, dry_run=dry_run)
+            try:
+                moved = move_or_rename(p, target_path, dry_run=dry_run)
+            except Exception as e:
+                logger.error(f"Failed to move {p} -> {target_path}: {e}")
+
+
+
 def safe_text(val: t.Any) -> str:
+    """
+    Convert a value into a safe, stripped string.
+    :param val: input value. If None, returns an empty string.
+                If a non-string sequence (list/tuple/other Sequence), returns the string form of
+                its first element (or '' if the sequence is empty).
+                Other values are converted to str() and stripped.
+    :return: stripped string representation or '' for None/empty sequence.
+    """
     if val is None:
         return ''
-    if isinstance(val, (list, tuple)):
-        val = val[0] if val else ''
+
+    # Treat non-string sequences by taking their first element (if any).
+    # We explicitly exclude str/bytes/bytearray so that strings are not treated as sequences.
+    if isinstance(val, t.Sequence) and not isinstance(val, (str, bytes, bytearray)):
+        if len(val) == 0:
+            return ''
+        val = val[0]
+
     return str(val).strip()
 
 
@@ -210,20 +370,22 @@ def read_tags(path: Path) -> dict:
         'release_type': None,
     }
     try:
+
         m = MutagenFile(str(path), easy=False)
         if m is None:
             return data
-        # Common lookups
-        # artist
-        artist = get_tag_value(m, ['artist', '©ART', '©ARTIST', 'TPE1', 'artist'])
-        albumartist = get_tag_value(m, ['albumartist', 'aART', '©ART', 'albumartist'])
-        album = get_tag_value(m, ['album', '\u00a9alb', '©alb', 'TALB', 'album'])
-        title = get_tag_value(m, ['title', '\u00a9nam', '©nam', 'TIT2', 'title'])
-        year = get_tag_value(m, ['date', 'year', '\u00a9day', '©day', 'TDRC'])
+
+        # Common lookup
+        tags = {key: get_tag_value(m, keys) for key, keys in TAG_KEYS.items()}
+        artist = tags['artist']
+        albumartist = tags['albumartist']
+        album = tags['album']
+        title = tags['title']
+        year = tags['year']
         # disc and track can be stored as "1/2" or as numbers
-        disc = get_tag_value(m, ['disc', 'disk', 'disknumber', 'disk number', 'discnumber'])
-        track = get_tag_value(m, ['track', 'tracknumber', 'trkn', 'TRCK'])
-        release_type = get_tag_value(m, ['release_type', 'albumtype', 'media', 'stik', 'cpil'])
+        disc = tags['disc']
+        track = tags['track']
+        release_type = tags['release_type']
 
         # Normalize
         data['artist'] = safe_text(artist) or safe_text(albumartist) or None
@@ -333,121 +495,6 @@ def move_or_rename(src: Path, dst: Path, dry_run: bool = False):
     return True
 
 
-def process_album(album_path: Path, dry_run: bool = False):
-    logger.info(f"Processing album dir: {album_path}")
-    # Gather audio files directly under album_path and in immediate subdirs (ignore nested albums)
-    files = [p for p in album_path.iterdir() if Helper.is_audio_file(p)]
-    # Also include audio files in immediate subdirs (commonly disc subdirs)
-    for child in album_path.iterdir():
-        if child.is_dir():
-            for p in child.iterdir():
-                if Helper.is_audio_file(p):
-                    files.append(p)
-    if not files:
-        logger.debug(f"No audio files found in {album_path}")
-        return
-
-    tag_samples = [read_tags(p) for p in files]
-    # Determine album-level metadata by majority / fallbacks
-    artist = None
-    album = None
-    year = None
-    release_type = None
-    discs = set()
-
-    for t in tag_samples:
-        if not artist and t.get('albumartist'):
-            artist = t.get('albumartist')
-        if not artist and t.get('artist'):
-            artist = t.get('artist')
-        if not album and t.get('album'):
-            album = t.get('album')
-        if not year and t.get('year'):
-            year = t.get('year')
-        if not release_type and t.get('release_type'):
-            release_type = t.get('release_type')
-        if t.get('disc'):
-            discs.add(int(t.get('disc')))
-        else:
-            discs.add(1)
-
-    if not artist:
-        artist = 'Unknown Artist'
-    if not album:
-        album = album_path.name
-    album_dir_name = build_album_dir_name(artist, year, album, release_type)
-
-    # If album_path is not already named like album_dir_name, attempt to rename directory
-    parent = album_path.parent
-    target_album_dir = parent / album_dir_name
-    if album_path.name != album_dir_name:
-        # if target exists and is different from our source, do not clobber
-        if target_album_dir.exists() and target_album_dir.resolve() != album_path.resolve():
-            logger.warning(f"Target album dir already exists, skipping rename: {target_album_dir}")
-        else:
-            if dry_run:
-                logger.info(f"DRY RUN: would rename album dir '{album_path.name}' -> '{album_dir_name}'")
-                # For DRY RUN, proceed as if renamed for downstream path calculations
-                renamed_album_dir = target_album_dir
-            else:
-                try:
-                    album_path.rename(target_album_dir)
-                    logger.info(f"Renamed album dir '{album_path}' -> '{target_album_dir}'")
-                    renamed_album_dir = target_album_dir
-                except Exception as e:
-                    logger.error(f"Failed to rename album dir {album_path} -> {target_album_dir}: {e}")
-                    renamed_album_dir = album_path
-    else:
-        renamed_album_dir = album_path
-
-    # Re-scan files under renamed_album_dir for up-to-date list
-    files = [p for p in renamed_album_dir.iterdir() if Helper.is_audio_file(p)]
-    for child in renamed_album_dir.iterdir():
-        if child.is_dir():
-            for p in child.iterdir():
-                if Helper.is_audio_file(p):
-                    files.append(p)
-
-    # Determine disc set after reading tags (some files may not have disc tags)
-    disc_map = {}  # mapping from file -> (disc, track)
-    for p in files:
-        t = read_tags(p)
-        disc = t.get('disc') or 1
-        track = t.get('track') or 0
-        disc = int(disc)
-        track = int(track)
-        disc_map[p] = (disc, track, t)
-
-    discs_present = sorted({d for d, _, _ in [v for v in disc_map.values()]})
-    multi_disc = len(discs_present) > 1
-
-    # For multi-disc: create per-disc subdir
-    for p, (disc, track, tags) in disc_map.items():
-        track_num = padded(track, 2)
-        filename = f"{track_num}. {tags.get('artist') or artist} - {tags.get('title') or p.stem}{p.suffix}"
-        # sanitize filename
-        filename = sanitize_filename(filename)
-        if multi_disc:
-            filename = f"{disc}/{discs_present} {filename}"
-            target_dir = f"{renamed_album_dir}/Disc {disc}"
-        else:
-            target_dir = renamed_album_dir
-        target_path = target_dir / filename
-        # If current file already at target path, skip
-        if p.resolve() == target_path.resolve():
-            logger.debug(f"File already at desired path: {p}")
-            continue
-        # If target exists and is same content, skip
-        if target_path.exists() and SKIP_EXISTING:
-            logger.info(f"Skipping move because target exists and SKIP_EXISTING=yes: {target_path}")
-            continue
-        ensure_dir(target_dir, dry_run=dry_run)
-        try:
-            moved = move_or_rename(p, target_path, dry_run=dry_run)
-        except Exception as e:
-            logger.error(f"Failed to move {p} -> {target_path}: {e}")
-
-
 def sanitize_filename(name: str) -> str:
     # Remove problematic characters for cross-platform compatibility
     name = unicodedata.normalize('NFKD', name)
@@ -472,8 +519,8 @@ def main(argv=None):
     level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(level=level, format='%(levelname)s: %(message)s')
 
-    normalizer = AlbumNormalizer(args.source)
-    normalizer.process_dirs()
+    normalizer = Normalizer(args.source)
+    normalizer.normalize()
 
 
 if __name__ == '__main__':
