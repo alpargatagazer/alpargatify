@@ -4,12 +4,10 @@ FROM python:3.14-slim AS builder
 ARG BEETS_VERSION=2.5
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system deps needed for beets plugins (file, ffmpeg if needed, libmagic, etc.)
+# Install system deps needed for beets plugins (file, ffmpeg if needed, libmagic, buildessentials, etc.)
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-     file \
      build-essential \
-     libmagic1 \
   && rm -rf /var/lib/apt/lists/*
 
 # Create a venv and install pinned beets into it
@@ -26,11 +24,6 @@ FROM python:3.14-slim AS runtime
 
 ENV PATH="/opt/venv/bin:$PATH"
 COPY --from=builder /opt/venv /opt/venv
-
-# minimal runtime system deps
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends file libmagic1 \
-  && rm -rf /var/lib/apt/lists/*
 
 # non-root user
 RUN useradd -m beets
