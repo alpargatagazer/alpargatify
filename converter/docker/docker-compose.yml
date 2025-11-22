@@ -16,5 +16,6 @@ services:
       - IMPORT_SRC_PATH=/import
       - BEETS_CONFIG_PATH=/config.yaml
       - DRY_RUN=${DRY_RUN:-no}
+      - IMPORT_MODE=${IMPORT_MODE:-full}
     restart: "no"
     entrypoint: ["/entrypoint.sh"]

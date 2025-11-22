@@ -13,6 +13,7 @@ library: /data/library.db
 threaded: yes
 
 import:
+  # These values can be overriden by the wrapper script via flags
   move: yes        # move files into the library
   copy: no
   write: yes       # write metadata to files

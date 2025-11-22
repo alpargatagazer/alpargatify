@@ -6,25 +6,64 @@ IFS=$'\n\t'
 CONFIG_PATH=${BEETS_CONFIG_PATH:-/config.yaml}
 IMPORT_SRC_PATH=${IMPORT_SRC_PATH:-/import}
 DRY_RUN=${DRY_RUN:-no}
+IMPORT_MODE=${IMPORT_MODE:-full}  # expected values: full, order-only, tag-only
 
-# Run beets import.
-# We instruct beets to import the IMPORT_SRC_PATH directory.
-# -c config file path
-# --move causes beets to move files into the library directory (not copy)
-# --yes answers confirmations
-# If DRY_RUN=yes, use --pretend so beets does not actually move files.
-BEET_CMD=(beet -c "$CONFIG_PATH" import)
+# Build base beet command
+BEET_BASE=(beet -c "$CONFIG_PATH")
+
+# Map modes to beets cli flags:
+# - full:
+#     -> move files into library and autotag (default behavior)
+# - order-only:
+#     -> move files but do NOT autotag (-A) and DO NOT write tags (-W)
+# - tag-only:
+#     -> do not move (don't copy): -C ; allow autotag & write tags (default)
+#
+# Note: beets CLI flags referenced here come from beets docs/manpages:
+#   --pretend  : preview without changes
+#   --move     : move files into library (instead of copying)
+#   -A         : don't autotag (we use this to disable autotagging)
+#   -W         : don't write tags (we use this to avoid tag writes)
+#   -C         : don't copy (do not move/copy files)  -- use for tag-only
+#
+# If your beets install uses different flags, adjust these mappings here.
+
+# Compose the final beet import command based on mode and dry run
+BEET_CMD=("${BEET_BASE[@]}" import)
 if [ "$DRY_RUN" = "yes" ]; then
+  # pretend mode: just preview
   BEET_CMD+=(--pretend)
-else
-  BEET_CMD+=(--move)
 fi
+
+case "$IMPORT_MODE" in
+  full)
+    # move + autotag (default)
+    true
+    ;;
+  order-only)
+    # move files into library, but don't autotag and don't write tags
+    BEET_CMD+=(-A -W)
+    ;;
+  tag-only)
+    # autotag/write tags but do NOT move/copy files (-C)
+    BEET_CMD+=(-C)
+    ;;
+  *)
+    echo "Unknown IMPORT_MODE: $IMPORT_MODE" >&2
+    exit 2
+    ;;
+esac
+
+# Add import source path
 BEET_CMD+=("$IMPORT_SRC_PATH")
+
 echo "Running: $(printf "%s " "${BEET_CMD[@]}" | tr '\n' ' ')"
 
-# Simple retry wrapper
+# Simple retry wrapper (keeps your previous behavior)
 MAX_RETRIES=5
 attempt=0
+EXIT_CODE=1
+
 until [ $attempt -ge $MAX_RETRIES ]
 do
   set +e
@@ -35,7 +74,7 @@ do
     break
   else
     attempt=$((attempt+1))
-    echo "Whole-import attempt $attempt/$MAX_RETRIES failed — retrying after $((attempt*3))s..."
+    echo "Whole-import attempt $attempt/$MAX_RETRIES failed — retrying after $((attempt*5))s..."
     sleep $((attempt*5))
   fi
 done
