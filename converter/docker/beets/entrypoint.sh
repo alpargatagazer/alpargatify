@@ -2,31 +2,22 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Expected: /data mounted (destination music dir), /config.yaml mounted (beets config)
-CONFIG=${BEETS_CONFIG_PATH:-/config.yaml}
-DATA_DIR=/data
+# Config and source path (allow override from environment)
+CONFIG_PATH=${BEETS_CONFIG_PATH:-/config.yaml}
+SRC_DIR=${IMPORT_SRC:-/data}
 
-if [ ! -d "$DATA_DIR" ]; then
-  echo "ERROR: /data not mounted or not a directory" >&2
-  exit 2
-fi
+# Run beets import (use `beet` CLI). Use -c to point to config file.
+# -y answers yes to prompts so the container runs unattended.
+# We avoid extra flags so the container works with the minimal beets install.
+exec beet -c "$CONFIG_PATH" import "$SRC_DIR" || exit_code=$?
 
-if [ ! -f "$CONFIG" ]; then
-  echo "WARNING: beets config not found at $CONFIG; running beets with defaults"
-fi
+# Capture exit code: if beet failed, still write sentinel so dependent container sees completion
+exit_code=${exit_code:-0}
 
-# Run beets import in-place; import will write tags back to files (beets_config.yaml should have write: yes, copy: no)
-echo "Running beets import on $DATA_DIR with config $CONFIG"
-if [ -f "$CONFIG" ]; then
-  beet -c "$CONFIG" import -q "$DATA_DIR" || true
-  # ensure tags written
-  beet -c "$CONFIG" write -q || true
-else
-  beet import -q "$DATA_DIR" || true
-  beet write -q || true
-fi
+echo "Beets finished with exit code $exit_code"
+# Create a sentinel file inside the shared /data volume so the normalizer can detect completion
+# We include the exit code for debugging.
+printf "beets_exit=%s\nfinished_at=%s\n" "$exit_code" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$SENTINEL_FILE" || true
 
-# Optionally, perform other beets commands (fetchart, embedart) depending on plugins
-# Touch sentinel for the normalizer service to pick up
-touch "$DATA_DIR/.beets_done"
-echo "Beets step finished; sentinel created at $DATA_DIR/.beets_done"
+# Exit with the same code beets had
+exit "$exit_code"

@@ -11,7 +11,7 @@ RUN useradd -m beets
 WORKDIR /home/beets
 
 # Install beets and select plugins
-RUN pip install --no-cache-dir beets
+RUN pip install --no-cache-dir "beets[fetchart,embedart]"
 
 # Copy entrypoint
 COPY beets_config.yaml /app/beets_config.yaml

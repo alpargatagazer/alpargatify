@@ -1,85 +1,35 @@
-# beets_config.yaml - recommended config for tag normalization
-# Place next to wrapper.sh or pass a path with --beets-config
+# Minimal beets configuration: operate on /data and normalize file paths
+# Moves files into a consistent library layout and writes tags.
+
 directory: /data
-library: /data/.beetslibrary.db
+library: /home/beets/library.db
 
 import:
-  write: yes         # write metadata to files
-  copy: no           # do not copy (we operate in-place)
-  move: no
-  resume: no
-  timid: no
-
-plugins:
-  - fetchart
-  - embedart
-  - replaygain
-  - lastgenre
-  - fetchmusicbrainz
-  - scrub
-  - edit
-  - badfiles
-  - autotag
-  - disambiguate
-
-# fetchart settings
-fetchart:
-  auto: yes
-  cautious: no
-  minwidth: 300
-  maxwidth: 1000
-  sources: coverart itunes amazon
-
-embedart:
-  auto: yes
-  ifempty: yes
-  maxwidth: 0
-
-scrub:
-  paths: yes
-  # remove weird control chars, reorder punctuation
-  fields: album albumartist artist composer genre title
-  chars: '\x00-\x1F'
-
-autotag:
-  # aggressive matching (be careful if you have many obscure files)
-  candidates: 10
-  allow_new_albums: yes
-
-replaygain:
-  backend: bs1770gain
-  overwrite: no
-
-lastgenre:
-  source: last.fm
-  whitelist:
-    - rock
-    - electronic
-    - pop
-    - jazz
-    - classical
-
-badfiles:
-  commands: ["file -b --mime-type $path"]
+  move: yes        # move files into the library
+  copy: no
+  write: yes       # write metadata to files
+  singletons: no
+  resume: yes
+  incremental: no
+  quiet: yes
+  autotag: yes
 
 paths:
-  default: $albumartist/$album/$track - $title
+  default: "$albumartist/$album/$track - $title"
 
-# mapping common tags to write into files
-item_fields:
-  - title
-  - artist
-  - album
-  - albumartist
-  - track
-  - tracktotal
-  - disc
-  - disctotal
-  - date
-  - year
-  - genre
-  - composer
+permitted_extensions:
+  - mp3
+  - m4a
+  - aac
+  - mp4
+  - flac
+  - wav
+  - ogg
 
-# Use MusicBrainz metadata where possible
-musicbrainz:
-  host: musicbrainz.org
+plugins:
+  - musicbrainz # Music indexer
+  - fetchart    # Download cover for album
+  - embedart    # Embed cover in songs
+
+# Keep cover art handling minimal
+art_filename: cover

@@ -1,35 +1,16 @@
 services:
-  # beets:
-  #   build:
-  #     context: ./beets
-  #   image: local/beets:latest
-  #   container_name: beets_importer
-  #   # Mount the destination music directory at /data (where beets operates)
-  #   # and mount your beets config file.
-  #   volumes:
-  #     - "${DEST_PATH}:/data:rw"
-  #     - "${BEETS_CONFIG}:/config.yaml:ro"
-  #   environment:
-  #     - BEETS_CONFIG_PATH=/config.yaml
-  #   # one-shot: run and exit; compose won't try to restart
-  #   restart: "no"
-  #   entrypoint: ["/entrypoint.sh"]
-
-  normalizer:
+  beets:
     build:
-      context: ./normalizer
-    image: local/normalizer:latest
-    container_name: normalizer
-    # depends_on:
-    #   - beets
-    # mount the parent directory of the album, not the album dir itself
+      context: ./beets
+    image: local/beets:latest
+    container_name: beets_importer
+    # Mount the destination music directory at /data (where beets operates)
+    # and mount your beets config file.
     volumes:
-      - "${PARENT_OF_DEST_PATH}:/data:rw"
+      - "${DEST_PATH}:/data:rw"
+      - "${BEETS_CONFIG}:/config.yaml:ro"
     environment:
-      # inside the container the target album path becomes /data/<DEST_SUBPATH>
-      - SRC_DIR=/data/${DEST_SUBPATH}
-      - DRY_RUN=${DRY_RUN:-no}
-      # optional: pass SKIP_EXISTING if you want to control it from the host
-      - SKIP_EXISTING=${SKIP_EXISTING:-yes}
+      - BEETS_CONFIG_PATH=/config.yaml
+    # one-shot: run and exit; compose won't try to restart
     restart: "no"
     entrypoint: ["/entrypoint.sh"]
