@@ -20,12 +20,25 @@ else
   BEET_CMD+=(--move)
 fi
 BEET_CMD+=("$IMPORT_SRC_PATH")
-
 echo "Running: $(printf "%s " "${BEET_CMD[@]}" | tr '\n' ' ')"
-set +e
-"${BEET_CMD[@]}"
-EXIT_CODE=$?
-set -e
+
+# Simple retry wrapper
+MAX_RETRIES=5
+attempt=0
+until [ $attempt -ge $MAX_RETRIES ]
+do
+  set +e
+  "${BEET_CMD[@]}"
+  EXIT_CODE=$?
+  set -e
+  if [ $EXIT_CODE -eq 0 ]; then
+    break
+  else
+    attempt=$((attempt+1))
+    echo "Whole-import attempt $attempt/$MAX_RETRIES failed — retrying after $((attempt*3))s..."
+    sleep $((attempt*5))
+  fi
+done
 
 echo "Beets finished with exit code $EXIT_CODE"
 

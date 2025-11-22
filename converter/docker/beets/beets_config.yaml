@@ -8,7 +8,7 @@
 #               <track_padded>. <Artist> - <Title>.<ext>
 
 directory: /data
-library: /home/beets/library.db
+library: /data/library.db
 
 import:
   move: yes        # move files into the library
@@ -19,8 +19,8 @@ import:
   incremental: no
   quiet: yes
   autotag: yes
-  # On duplicates: remove the old item so the new import overwrites
-  duplicate_action: remove
+  # On duplicates: merge the old item with the new one
+  duplicate_action: merge
 
 # Keep cover art handling minimal
 art_filename: cover
@@ -35,12 +35,13 @@ plugins:
 item_fields:
   disc_folder: f"Disc {disc:02d}" if disctotal > 1 else ""
   disc_and_track: f"{disc:02d}.{track:02d}" if disctotal > 1 else f"{track:02d}"
+  custom_album_type: f" {albumtype}" if albumtype and albumtype != "album" else ""
 
 paths:
   # album directory: <AlbumArtist>/<AlbumArtist> - (<Year>) <Album Title> [<Release Type>]/
   # if multidisc: create "Disc <disc>/" subfolder and prefix filenames with "<disc>-<track_padded>"
   # if single-disc: place files directly and use "<track_padded>. <Artist> - <Title>"
-  default: $albumartist/$albumartist - ($year) $album%if{$albumtype, [$albumtype]}/$disc_folder/$disc_and_track. $artist - $title
+  default: $albumartist/$albumartist - ($year) $album$custom_album_type/$disc_folder/$disc_and_track. $artist - $title
   singleton: Non-Album/$artist/$title
   comp: Compilations/$album%aunique{}/$track $title
 
