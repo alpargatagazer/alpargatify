@@ -22,8 +22,8 @@ import:
   incremental: no
   quiet: yes
   autotag: yes
-  # On duplicates: merge the old item with the new one
-  duplicate_action: merge
+  # On duplicate, remove the old item
+  duplicate_action: remove
 
 # Keep cover art handling minimal
 art_filename: cover
@@ -68,6 +68,21 @@ permitted_extensions:
   - flac
   - wav
   - ogg
+
+musicbrainz:
+  extra_tags: [barcode, catalognum, country, label, media, year]
+  external_ids:
+    discogs: yes
+    spotify: yes
+    bandcamp: yes
+    beatport: yes
+    deezer: yes
+    tidal: yes
+
+lastgenre:
+  force: yes
+  keep_existing: no
+  count: 5
 
 lyrics:
   sources: [genius, ]
