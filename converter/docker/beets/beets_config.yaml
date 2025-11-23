@@ -33,6 +33,7 @@ plugins:
   - inline      # Define custom item fields
   - albumtypes  # Detect album types and let you edit them
   - musicbrainz # Extract metadata from MusicBrainz
+  - scrub       # Clean up original metadata
   - lastgenre   # Guess genre from last.fm tags, needs installation
   - fetchart    # Download cover for album, needs installation
   - embedart    # Embed cover in songs, needs installation
