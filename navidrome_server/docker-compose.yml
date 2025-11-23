@@ -1,6 +1,7 @@
 services:
   navidrome:
     image: deluan/navidrome:${NAVIDROME_VERSION}
+    container_name: navidrome
     user: ${PUID}:${PGID}
     ports:
       - "4533:${NAVIDROME_PORT}"

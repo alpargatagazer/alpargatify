@@ -127,29 +127,34 @@ info "Exported PUID=${PUID}, PGID=${PGID}"
 ###############################################################################
 # Copy navidrome.toml and background directory into config path
 ###############################################################################
-TEMPLATE_TOML_SRC="$SCRIPT_DIR/navidrome.toml"
-TEMPLATE_BACKGROUND_SRC="$SCRIPT_DIR/background"
+TOML_SRC="$SCRIPT_DIR/configs/navidrome.toml"
+BACKGROUND_SRC="$SCRIPT_DIR/background"
 
-if [[ -f "$TEMPLATE_TOML_SRC" ]]; then
+if [[ -f "$TOML_SRC" ]]; then
   info "Copying navidrome.toml to ${NAVIDROME_CONFIG_PATH}/navidrome.toml"
-  cp -a "$TEMPLATE_TOML_SRC" "${NAVIDROME_CONFIG_PATH}/navidrome.toml"
+  cp -a "$TOML_SRC" "${NAVIDROME_CONFIG_PATH}/navidrome.toml"
 else
-  warn "Template navidrome.toml not found in $SCRIPT_DIR. Skipping copy."
+  warn "navidrome.toml not found in $SCRIPT_DIR. Skipping copy."
 fi
 
-if [[ -d "$TEMPLATE_BACKGROUND_SRC" ]]; then
+if [[ -d "$BACKGROUND_SRC" ]]; then
   info "Copying background directory to ${NAVIDROME_CONFIG_PATH}/background"
   # use rsync if available for reliable recursive copy preserving attributes
   if command -v rsync >/dev/null 2>&1; then
-    rsync -a "$TEMPLATE_BACKGROUND_SRC"/ "${NAVIDROME_CONFIG_PATH}/background"/
+    rsync -a "$BACKGROUND_SRC"/ "${NAVIDROME_CONFIG_PATH}/background"/
   else
     # fallback to cp -a
     mkdir -p "${NAVIDROME_CONFIG_PATH}/background"
-    cp -a "$TEMPLATE_BACKGROUND_SRC"/. "${NAVIDROME_CONFIG_PATH}/background"/
+    cp -a "$BACKGROUND_SRC"/. "${NAVIDROME_CONFIG_PATH}/background"/
   fi
 else
   warn "Template background directory not found in $SCRIPT_DIR. Skipping copy."
 fi
 
-# Launch compose (use multiple files if desired)
-docker-compose -f docker-compose.yml up -d
+# Launch all compose within the script directory
+compose_files=()
+for f in "$SCRIPT_DIR"/docker-compose*.yml; do
+    compose_files+=(-f "$f")
+done
+
+docker-compose "${compose_files[@]}" up -d

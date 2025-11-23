@@ -1,4 +1,5 @@
 # Navidrome Configuration
+# All info: https://www.navidrome.org/docs/usage/configuration-options/#available-options
 
 AutoTranscodeDownload = false               # By default is false but I want to keep it explicit
 DataFolder = "/data"                        # Same as before
