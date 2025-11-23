@@ -53,7 +53,6 @@ services:
       - /var/run:/var/run:rw                # Only works with rw permissions
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-
     networks:
       - navidrome
     restart: unless-stopped
