@@ -1,0 +1,21 @@
+services:
+  beets:
+    build:
+      context: ./beets
+    image: local/beets:latest
+    container_name: beets_importer
+    # Mount the final music library root at /data (beets' library directory)
+    # Mount the temporary import source at /import
+    # Mount a host beets config (if provided)
+    volumes:
+      # These variables are set in the wrapper
+      - "${DEST_PATH}:/data:rw"
+      - "${IMPORT_SRC}:/import:rw"
+      - "${BEETS_CONFIG}:/config.yaml:ro"
+    environment:
+      - IMPORT_SRC_PATH=/import
+      - BEETS_CONFIG_PATH=/config.yaml
+      - DRY_RUN=${DRY_RUN:-no}
+      - IMPORT_MODE=${IMPORT_MODE:-full}
+    restart: "no"
+    entrypoint: ["/entrypoint.sh"]

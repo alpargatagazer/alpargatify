@@ -1,0 +1,89 @@
+# Minimal beets configuration (used inside container). The wrapper mounts your host config on /config.yaml
+# Changed paths to produce:
+#   /<AlbumArtist>/
+#       <Artist> - (<Year>) <Album Title> [<Release Type>]/
+#           (if multi-disc) Disc <N>/
+#               <N>-<track_padded>. <Artist> - <Title>.<ext>
+#           (if single-disc)
+#               <track_padded>. <Artist> - <Title>.<ext>
+
+directory: /data
+library: /data/library.db
+
+threaded: yes
+
+import:
+  # These values can be overriden by the wrapper script via flags
+  move: yes        # move files into the library
+  copy: no
+  write: yes       # write metadata to files
+  singletons: no
+  resume: yes
+  incremental: no
+  quiet: yes
+  autotag: yes
+  # On duplicate, remove the old item
+  duplicate_action: remove
+
+# Keep cover art handling minimal
+art_filename: cover
+
+# Use inline plugin to define the extra variables
+plugins:
+  - inline      # Define custom item fields
+  - albumtypes  # Detect album types and let you edit them
+  - musicbrainz # Extract metadata from MusicBrainz
+  - scrub       # Clean up original metadata
+  - lastgenre   # Guess genre from last.fm tags, needs installation
+  - fetchart    # Download cover for album, needs installation
+  - embedart    # Embed cover in songs, needs installation
+  - lyrics      # Fetch lyrics for songs, needs installation
+
+item_fields:
+  disc_folder: f"Disc {disc:02d}" if disctotal > 1 else ""
+  disc_and_track: f"{disc:02d}.{track:02d}" if disctotal > 1 else f"{track:02d}"
+
+albumtypes:
+  types:
+    - ep: 'EP'
+    - single: 'Single'
+    - soundtrack: 'OST'
+    - live: 'Live'
+    - compilation: 'Compilation'
+    - remix: 'Remix'
+  bracket: '[]'
+
+paths:
+  # album directory: <AlbumArtist>/<AlbumArtist> - (<Year>) <Album Title> [<Release Type>]/
+  # if multidisc: create "Disc <disc>/" subfolder and prefix filenames with "<disc>-<track_padded>"
+  # if single-disc: place files directly and use "<track_padded>. <Artist> - <Title>"
+  default: $albumartist/$albumartist - [$year]$atypes $album/$disc_folder/$disc_and_track. $artist - $title
+  singleton: Non-Album/$artist/$title
+  comp: Compilations/$album%aunique{}/$track. $artist -$title
+
+permitted_extensions:
+  - mp3
+  - m4a
+  - aac
+  - mp4
+  - flac
+  - wav
+  - ogg
+
+musicbrainz:
+  extra_tags: [barcode, catalognum, country, label, media, year]
+  external_ids:
+    discogs: yes
+    spotify: yes
+    bandcamp: yes
+    beatport: yes
+    deezer: yes
+    tidal: yes
+
+lastgenre:
+  force: yes
+  keep_existing: no
+  count: 5
+
+lyrics:
+  sources: [genius, ]

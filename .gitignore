@@ -1,0 +1,11 @@
+# Audio files
+*.m4a
+*.mp4
+*.flac
+
+# IDEs
+.idea/
+.vscode/
+
+# Python venvs
+**.venv
