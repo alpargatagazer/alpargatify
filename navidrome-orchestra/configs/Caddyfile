@@ -1,0 +1,35 @@
+## Add http:// as a prefix for each item for testing
+
+# Navidrome - public site
+navidrome.<domain> {
+    reverse_proxy navidrome:<navidrome_port>
+}
+
+# Grafana - public site
+grafana.<domain> {
+    route {
+        reverse_proxy grafana:<grafana_port>
+    }
+}
+
+# Internal monitoring endpoints - do NOT expose to the internet
+# We respond with abort for public requests; Caddy will still proxy if the client is in allowed ranges (e.g., local network / your admin IP).
+prometheus.<domain> {
+    @allowed client_ip 127.0.0.1 192.168.1.0/24 10.0.0.0/8
+    handle @allowed {
+        reverse_proxy prometheus:<prometheus_port>
+    }
+    handle {
+        abort
+    }
+}
+
+cadvisor.<domain> {
+    @allowed client_ip 127.0.0.1 192.168.1.0/24 10.0.0.0/8
+    handle @allowed {
+        reverse_proxy cadvisor:<cadvisor_port>
+    }
+    handle {
+        abort
+    }
+}

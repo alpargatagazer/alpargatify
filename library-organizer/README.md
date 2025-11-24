@@ -1,4 +1,4 @@
-# Music library processor
+# Music library organizer
 
 Small, focused pipeline to convert lossless music files and import them into a beets-managed library using Docker.
 

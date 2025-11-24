@@ -28,6 +28,9 @@ import:
 # Keep cover art handling minimal
 art_filename: cover
 
+# Preserve original date instead of publishing information when writing tags
+original_date: yes
+
 # Use inline plugin to define the extra variables
 plugins:
   - inline      # Define custom item fields

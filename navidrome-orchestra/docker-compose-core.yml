@@ -1,0 +1,25 @@
+services:
+  navidrome:
+    image: deluan/navidrome:${NAVIDROME_VERSION}
+    container_name: navidrome
+    user: ${PUID}:${PGID}
+    ports:
+      - "4533:${NAVIDROME_PORT}"
+    environment:
+      ND_PORT: ${NAVIDROME_PORT}
+      ND_CONFIGFILE: /data/navidrome.toml
+      ND_LASTFM_APIKEY: ${LASTFM_APIKEY}
+      ND_LASTFM_SECRET: ${LASTFM_SECRET}
+      ND_PROMETHEUS_METRICSPATH: ${CUSTOM_METRICS_PATH}
+    volumes:
+      - "${NAVIDROME_MUSIC_PATH}:/music:ro"
+      - "${VOLUMES_PATH}/navidrome:/data"
+      - "./configs/navidrome.toml:/data/navidrome.toml:ro"
+      - "${BACKGROUNDS_PATH}:/data/backgrounds:ro"
+    networks:
+      - navidrome
+    restart: unless-stopped
+
+networks:
+  navidrome:
+    driver: bridge

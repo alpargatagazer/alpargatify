@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # Navidrome: replace the metrics_path to match ND_PROMETHEUS_METRICSPATH you set
+  - job_name: 'navidrome'
+    metrics_path: <custom_metrics_path>
+    static_configs:
+      - targets: ['navidrome:<navidrome_port>']
+
+  # cAdvisor (container metrics)
+  - job_name: 'cadvisor'
+    metrics_path: <custom_metrics_path>
+    static_configs:
+      - targets: ['cadvisor:<cadvisor_port>']
+
+  # node-exporter (host metrics)
+  - job_name: 'node'
+    metrics_path: <custom_metrics_path>
+    static_configs:
+      - targets: ['node-exporter:<node_exporter_port>']

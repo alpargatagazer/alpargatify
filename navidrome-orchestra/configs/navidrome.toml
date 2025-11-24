@@ -1,0 +1,40 @@
+# Navidrome Configuration
+# All info: https://www.navidrome.org/docs/usage/configuration-options/#available-options
+
+AutoTranscodeDownload = false               # By default is false but I want to keep it explicit
+DataFolder = "/data"                        # Same as before
+DefaultLanguage = "es"
+DefaultShareExpiration = "48h"              # 2 days
+DefaultTheme = "Nord"
+EnableGravatar = true
+EnableInsightsCollector = true              # Default, but keep it true to collect insights
+EnableSharing = true
+LogLevel = "info"                           # Keep it at info
+MusicFolder = "/music"                      # Default music folder
+SessionTimeout = "48h"                      # 48 hours, default
+TranscodingCacheSize = "100MB"
+UILoginBackgroundURL = "/backgrounds"
+UIWelcomeMessage = "Gracias por estar aquí"
+
+[Backup]
+Path = "/data/backup/"
+Count = 3
+Schedule =  "0 0 * * 0" # Every Sunday at midnight
+
+[Deezer]
+Enabled = true
+
+[Jukebox]
+Enabled = false # Let's take a look at this later
+
+[LastFM]
+Enabled = true
+
+[Prometheus]
+Enabled = true
+
+[Scanner]
+Enabled = true
+PurgeMissing = "always" # Remove missing files on every scan
+Schedule = "0 * * * *"  # Every hour
+WatcherWait = "1m"

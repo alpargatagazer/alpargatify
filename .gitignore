@@ -9,3 +9,16 @@
 
 # Python venvs
 **.venv
+
+# Databases, cache and container volumes
+.db*
+**/cache/
+**volumes/
+backgrounds/
+
+# Environment files
+*.env
+
+# Test configuration files
+*.test
+*.custom
