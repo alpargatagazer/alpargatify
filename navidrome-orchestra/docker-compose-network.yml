@@ -4,15 +4,11 @@ services:
     container_name: caddy
     volumes:
       - ./configs/Caddyfile.custom:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ${VOLUMES_PATH}/caddy/data:/data
+      - ${VOLUMES_PATH}/caddy/config:/config
     ports:
       - "80:80"
       - "443:443"
     networks:
       - navidrome
     restart: unless-stopped
-
-volumes:
-  caddy_data:
-  caddy_config:

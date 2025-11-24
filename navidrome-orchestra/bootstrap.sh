@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # bootstrap.sh - prepare config, render a small set of templates safely, validate ownership, copy templates and launch docker-compose
 # - creates config dir if missing
-# - generates a random CUSTOM_METRICS_PATH for Prometheus to scrape Navidrome
+# - generates a random CUSTOM_METRICS_PATH for Prometheus to scrape micrservices
 # - substitutes variables only in configs/prometheus.yml and configs/Caddyfile (not in docker-compose files)
 # - exports PUID and PGID derived from NAVIDROME paths and other env vars for docker compose
-# - copies navidrome.toml and background directory into config path
 # - runs all docker-compose*.yml files found next to the script (combined)
 #
 # Modes:
@@ -83,7 +82,6 @@ set +a
 ###############################################################################
 : "${DOMAIN:?"DOMAIN is not set in .env"}"
 : "${NAVIDROME_VERSION:?"NAVIDROME_VERSION is not set in .env"}"
-: "${NAVIDROME_CONFIG_PATH:?"NAVIDROME_CONFIG_PATH is not set in .env"}"
 : "${NAVIDROME_MUSIC_PATH:?"NAVIDROME_MUSIC_PATH is not set in .env"}"
 : "${NAVIDROME_PORT:?"NAVIDROME_PORT is not set in .env"}"
 : "${GRAFANA_PORT:?"GRAFANA_PORT is not set in .env"}"
@@ -96,29 +94,39 @@ set +a
 ###############################################################################
 echo
 echo "==== Navidrome bootstrap - summary ===="
-echo "Mode:                 ${MODE}"
-echo "Navidrome version:    ${NAVIDROME_VERSION}"
-echo "Navidrome music path: ${NAVIDROME_MUSIC_PATH}"
-echo "Navidrome config path:${NAVIDROME_CONFIG_PATH}"
-echo "Script directory:     $SCRIPT_DIR"
+echo "Mode:                       ${MODE}"
+echo "Navidrome version:          ${NAVIDROME_VERSION}"
+echo "Navidrome music path:       ${NAVIDROME_MUSIC_PATH}"
+echo "Microservice volume paths:  ${VOLUMES_PATH}"
+echo "Script directory:           ${SCRIPT_DIR}"
 echo "======================================"
 echo
 
 ###############################################################################
 # Ensure config and music directories exist
 ###############################################################################
-if [[ ! -d "$NAVIDROME_CONFIG_PATH" ]]; then
-  info "Config directory does not exist; creating: $NAVIDROME_CONFIG_PATH"
-  mkdir -p "$NAVIDROME_CONFIG_PATH"
-else
-  info "Config directory exists: $NAVIDROME_CONFIG_PATH"
-fi
-
+# Path where music should be
 if [[ ! -d "$NAVIDROME_MUSIC_PATH" ]]; then
   warn "Music directory does not exist; creating: $NAVIDROME_MUSIC_PATH"
   mkdir -p "$NAVIDROME_MUSIC_PATH"
 else
   info "Music directory exists: $NAVIDROME_MUSIC_PATH"
+fi
+# Path where the volume of the services will be stored
+VOLUMES_PATH="${VOLUMES_PATH:-$SCRIPT_DIR/volumes}"
+if [[ ! -d "$VOLUMES_PATH" ]]; then
+  warn "Volumes directory does not exist; creating: $VOLUMES_PATH"
+  mkdir -p "$VOLUMES_PATH"
+else
+  info "Volumes directory exists: $VOLUMES_PATH"
+fi
+# Path where the backgrounds for Navidrome login page are saved
+BACKGROUNDS_PATH="${BACKGROUNDS_PATH:-$SCRIPT_DIR/backgrounds}"
+if [[ ! -d "$BACKGROUNDS_PATH" ]]; then
+  warn "Backgrounds directory does not exist; creating: $BACKGROUNDS_PATH"
+  mkdir -p "$BACKGROUNDS_PATH"
+else
+  info "Backgrounds directory exists: $BACKGROUNDS_PATH"
 fi
 
 ###############################################################################
@@ -129,25 +137,13 @@ if stat --version >/dev/null 2>&1; then
   # GNU stat
   MUSIC_UID="$(stat -c '%u' "$NAVIDROME_MUSIC_PATH")"
   MUSIC_GID="$(stat -c '%g' "$NAVIDROME_MUSIC_PATH")"
-  CONFIG_UID="$(stat -c '%u' "$NAVIDROME_CONFIG_PATH")"
-  CONFIG_GID="$(stat -c '%g' "$NAVIDROME_CONFIG_PATH")"
 else
   # BSD/Mac stat
   MUSIC_UID="$(stat -f '%u' "$NAVIDROME_MUSIC_PATH")"
   MUSIC_GID="$(stat -f '%g' "$NAVIDROME_MUSIC_PATH")"
-  CONFIG_UID="$(stat -f '%u' "$NAVIDROME_CONFIG_PATH")"
-  CONFIG_GID="$(stat -f '%g' "$NAVIDROME_CONFIG_PATH")"
 fi
 
 info "Owner UID/GID of music path: ${MUSIC_UID}:${MUSIC_GID}"
-info "Owner UID/GID of config path: ${CONFIG_UID}:${CONFIG_GID}"
-
-if [[ "$MUSIC_UID" != "$CONFIG_UID" || "$MUSIC_GID" != "$CONFIG_GID" ]]; then
-  err "UID/GID mismatch between music and config paths."
-  err "Music: ${MUSIC_UID}:${MUSIC_GID}  Config: ${CONFIG_UID}:${CONFIG_GID}"
-  err "Please ensure both directories have the same owner (numeric uid/gid), or adjust permissions."
-  exit 3
-fi
 
 ###############################################################################
 # Export PUID and PGID for docker-compose environment
@@ -157,7 +153,7 @@ export PGID="$MUSIC_GID"
 info "Exported PUID=${PUID}, PGID=${PGID}"
 
 ###############################################################################
-# Generate random CUSTOM_METRICS_PATH for Prometheus to scrape Navidrome
+# Generate random CUSTOM_METRICS_PATH for Prometheus to scrape microservices
 # Example: /metrics-5f3a1b2c
 ###############################################################################
 rand_hex() {
@@ -172,31 +168,6 @@ RAN_SUFFIX="$(rand_hex)"
 CUSTOM_METRICS_PATH="/metrics-${RAN_SUFFIX}"
 export CUSTOM_METRICS_PATH
 info "Generated CUSTOM_METRICS_PATH=${CUSTOM_METRICS_PATH}"
-
-###############################################################################
-# Copy navidrome.toml and background directory into config path
-###############################################################################
-TOML_SRC="$SCRIPT_DIR/configs/navidrome.toml"
-BACKGROUND_SRC="$SCRIPT_DIR/background"
-
-if [[ -f "$TOML_SRC" ]]; then
-  info "Copying navidrome.toml to ${NAVIDROME_CONFIG_PATH}/navidrome.toml"
-  cp -a "$TOML_SRC" "${NAVIDROME_CONFIG_PATH}/navidrome.toml"
-else
-  warn "navidrome.toml not found in $SCRIPT_DIR/configs. Skipping copy."
-fi
-
-if [[ -d "$BACKGROUND_SRC" ]]; then
-  info "Copying background directory to ${NAVIDROME_CONFIG_PATH}/background"
-  if command -v rsync >/dev/null 2>&1; then
-    rsync -a "$BACKGROUND_SRC"/ "${NAVIDROME_CONFIG_PATH}/background"/
-  else
-    mkdir -p "${NAVIDROME_CONFIG_PATH}/background"
-    cp -a "$BACKGROUND_SRC"/. "${NAVIDROME_CONFIG_PATH}/background"/
-  fi
-else
-  warn "Template background directory not found in $SCRIPT_DIR. Skipping copy."
-fi
 
 ###############################################################################
 # Template expansion helper
@@ -332,13 +303,16 @@ done
 ###############################################################################
 # Export env vars for compose
 ###############################################################################
+export NAVIDROME_MUSIC_PATH
+export VOLUMES_PATH
+export BACKGROUNDS_PATH
 export DOMAIN
+export CUSTOM_METRICS_PATH
 export NAVIDROME_PORT
 export GRAFANA_PORT
 export PROMETHEUS_PORT
 export CADVISOR_PORT
 export NODE_EXPORTER_PORT
-export CUSTOM_METRICS_PATH
 
 ###############################################################################
 # Invoke compose with selected mode using original compose files

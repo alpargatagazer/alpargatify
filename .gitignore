@@ -10,9 +10,11 @@
 # Python venvs
 **.venv
 
-# Database and cache files
+# Databases, cache and container volumes
 .db*
 **/cache/
+**volumes/
+backgrounds/
 
 # Environment files
 *.env

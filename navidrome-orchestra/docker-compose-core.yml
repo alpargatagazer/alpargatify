@@ -12,8 +12,10 @@ services:
       ND_LASTFM_SECRET: ${LASTFM_SECRET}
       ND_PROMETHEUS_METRICSPATH: ${CUSTOM_METRICS_PATH}
     volumes:
-      - "${NAVIDROME_CONFIG_PATH}:/data"
       - "${NAVIDROME_MUSIC_PATH}:/music:ro"
+      - "${VOLUMES_PATH}/navidrome:/data"
+      - "./configs/navidrome.toml:/data/navidrome.toml:ro"
+      - "${BACKGROUNDS_PATH}:/data/backgrounds:ro"
     networks:
       - navidrome
     restart: unless-stopped
