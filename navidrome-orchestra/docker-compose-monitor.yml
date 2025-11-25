@@ -31,9 +31,8 @@ services:
       - --web.console.libraries=/etc/prometheus/console_libraries
       - --web.console.templates=/etc/prometheus/consoles
       - --web.enable-lifecycle
-      - --web.listen-address=:${PROMETHEUS_PORT}
     ports:
-      - "${PROMETHEUS_PORT}:${PROMETHEUS_PORT}"
+      - "${PROMETHEUS_PORT}:9090"
     volumes:
       - ./configs/prometheus.yml.custom:/etc/prometheus/prometheus.yml:ro
       - ${VOLUMES_PATH}/prometheus:/prometheus
@@ -45,10 +44,9 @@ services:
     image: gcr.io/cadvisor/cadvisor:v0.52.0
     container_name: cadvisor
     command:
-      - -port=${CADVISOR_PORT}
       - --prometheus_endpoint=${CUSTOM_METRICS_PATH}
     ports:
-      - "${CADVISOR_PORT}:${CADVISOR_PORT}"
+      - "${CADVISOR_PORT}:8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:rw                # Only works with rw permissions
@@ -63,9 +61,8 @@ services:
     container_name: node-exporter
     command:
       - --web.telemetry-path=${CUSTOM_METRICS_PATH}
-      - --web.listen-address=:${NODE_EXPORTER_PORT}
     ports:
-      - ${NODE_EXPORTER_PORT}:${NODE_EXPORTER_PORT}
+      - ${NODE_EXPORTER_PORT}:9100
     networks:
       - navidrome
     restart: unless-stopped

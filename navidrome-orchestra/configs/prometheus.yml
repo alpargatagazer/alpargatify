@@ -9,16 +9,16 @@ scrape_configs:
   - job_name: 'navidrome'
     metrics_path: <custom_metrics_path>
     static_configs:
-      - targets: ['navidrome:<navidrome_port>']
+      - targets: ['navidrome:4533']
 
   # cAdvisor (container metrics)
   - job_name: 'cadvisor'
     metrics_path: <custom_metrics_path>
     static_configs:
-      - targets: ['cadvisor:<cadvisor_port>']
+      - targets: ['cadvisor:8080']
 
   # node-exporter (host metrics)
   - job_name: 'node'
     metrics_path: <custom_metrics_path>
     static_configs:
-      - targets: ['node-exporter:<node_exporter_port>']
+      - targets: ['node-exporter:9100']

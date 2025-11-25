@@ -198,6 +198,7 @@ if [[ ! -d "$VOLUMES_PATH" ]]; then
 else
   info "Volumes directory exists: $VOLUMES_PATH"
 fi
+export VOLUMES_PATH
 # Path where the backgrounds for Navidrome login page are saved
 BACKGROUNDS_PATH="${BACKGROUNDS_PATH:-$SCRIPT_DIR/backgrounds}"
 if [[ ! -d "$BACKGROUNDS_PATH" ]]; then
@@ -206,6 +207,7 @@ if [[ ! -d "$BACKGROUNDS_PATH" ]]; then
 else
   info "Backgrounds directory exists: $BACKGROUNDS_PATH"
 fi
+export BACKGROUNDS_PATH
 
 ###############################################################################
 # Extract numeric uid/gid for both paths and ensure they match
@@ -244,6 +246,7 @@ rand_hex() {
 
 RAN_SUFFIX="$(rand_hex)"
 CUSTOM_METRICS_PATH="/metrics-${RAN_SUFFIX}"
+export CUSTOM_METRICS_PATH
 info "Generated CUSTOM_METRICS_PATH=${CUSTOM_METRICS_PATH}"
 
 ###############################################################################
@@ -382,13 +385,6 @@ compose_args=()
 for f in "${compose_ymls[@]}"; do
   compose_args+=(-f "$f")
 done
-
-###############################################################################
-# Export env vars for compose
-###############################################################################
-export VOLUMES_PATH
-export BACKGROUNDS_PATH
-export CUSTOM_METRICS_PATH
 
 ###############################################################################
 # Invoke compose with selected mode using original compose files

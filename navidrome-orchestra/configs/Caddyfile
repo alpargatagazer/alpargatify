@@ -2,13 +2,13 @@
 
 # Navidrome - public site
 navidrome.<domain> {
-    reverse_proxy navidrome:<navidrome_port>
+    reverse_proxy navidrome:4533
 }
 
 # Grafana - public site
 grafana.<domain> {
     route {
-        reverse_proxy grafana:<grafana_port>
+        reverse_proxy grafana:3000
     }
 }
 
@@ -17,7 +17,7 @@ grafana.<domain> {
 prometheus.<domain> {
     @allowed client_ip 127.0.0.1 192.168.1.0/24 10.0.0.0/8
     handle @allowed {
-        reverse_proxy prometheus:<prometheus_port>
+        reverse_proxy prometheus:9090
     }
     handle {
         abort
@@ -27,7 +27,7 @@ prometheus.<domain> {
 cadvisor.<domain> {
     @allowed client_ip 127.0.0.1 192.168.1.0/24 10.0.0.0/8
     handle @allowed {
-        reverse_proxy cadvisor:<cadvisor_port>
+        reverse_proxy cadvisor:8080
     }
     handle {
         abort
