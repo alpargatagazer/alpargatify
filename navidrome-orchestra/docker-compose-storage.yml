@@ -1,0 +1,13 @@
+services:
+  sftp:
+    image: atmoz/sftp:alpine-3.6
+    container_name: sftp
+    command:
+      - ${SFTP_USER}:${SFTP_PASSWORD}:${PUID}:${PGID}
+    volumes:
+      - ${NAVIDROME_MUSIC_PATH}:/home/${SFTP_USER}:rw
+    ports:
+      - "${SFTP_PORT}:22"
+    networks:
+      - navidrome
+    restart: unless-stopped

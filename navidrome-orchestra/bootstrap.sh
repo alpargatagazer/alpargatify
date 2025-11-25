@@ -81,13 +81,22 @@ set +a
 # Required variables (basic validation)
 ###############################################################################
 : "${DOMAIN:?"DOMAIN is not set in .env"}"
-: "${NAVIDROME_VERSION:?"NAVIDROME_VERSION is not set in .env"}"
 : "${NAVIDROME_MUSIC_PATH:?"NAVIDROME_MUSIC_PATH is not set in .env"}"
 : "${NAVIDROME_PORT:?"NAVIDROME_PORT is not set in .env"}"
 : "${GRAFANA_PORT:?"GRAFANA_PORT is not set in .env"}"
 : "${PROMETHEUS_PORT:?"PROMETHEUS_PORT is not set in .env"}"
 : "${CADVISOR_PORT:?"CADVISOR_PORT is not set in .env"}"
 : "${NODE_EXPORTER_PORT:?"NODE_EXPORTER_PORT is not set in .env"}"
+: "${SFTP_PORT:?"SFTP_PORT is not set in .env"}"
+# Check user/password vars
+if [ -z "$GRAFANA_ADMIN_USER" ] ||  -z "$GRAFANA_ADMIN_PASSWORD" ]; then
+  err "GRAFANA_ADMIN_USER and GRAFANA_ADMIN_PASSWORD must be set in .env. Exiting."
+  exit 3
+fi
+if [ -z "$SFTP_USER" ] ||  -z "$SFTP_PASSWORD" ]; then
+  err "SFTP_USER and SFTP_PASSWORD must be set in .env. Exiting."
+  exit 3
+fi
 
 ###############################################################################
 # Show info
@@ -95,7 +104,6 @@ set +a
 echo
 echo "==== Navidrome bootstrap - summary ===="
 echo "Mode:                       ${MODE}"
-echo "Navidrome version:          ${NAVIDROME_VERSION}"
 echo "Navidrome music path:       ${NAVIDROME_MUSIC_PATH}"
 echo "Microservice volume paths:  ${VOLUMES_PATH}"
 echo "Script directory:           ${SCRIPT_DIR}"
@@ -166,7 +174,6 @@ rand_hex() {
 
 RAN_SUFFIX="$(rand_hex)"
 CUSTOM_METRICS_PATH="/metrics-${RAN_SUFFIX}"
-export CUSTOM_METRICS_PATH
 info "Generated CUSTOM_METRICS_PATH=${CUSTOM_METRICS_PATH}"
 
 ###############################################################################
@@ -303,16 +310,9 @@ done
 ###############################################################################
 # Export env vars for compose
 ###############################################################################
-export NAVIDROME_MUSIC_PATH
 export VOLUMES_PATH
 export BACKGROUNDS_PATH
-export DOMAIN
 export CUSTOM_METRICS_PATH
-export NAVIDROME_PORT
-export GRAFANA_PORT
-export PROMETHEUS_PORT
-export CADVISOR_PORT
-export NODE_EXPORTER_PORT
 
 ###############################################################################
 # Invoke compose with selected mode using original compose files
