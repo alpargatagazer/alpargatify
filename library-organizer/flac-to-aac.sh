@@ -63,8 +63,8 @@ debug(){ if [ "$VERBOSE" = "yes" ]; then printf '%s DEBUG: %s\n' "$(time_stamp)"
 ###############################################################################
 # Defaults (change by editing script or via AF_OPTS env)
 ###############################################################################
-# Default chosen: 192 kbps AAC with 44.1 kHz sample rate
-DEFAULT_AF_ARGS=( -f m4af -d "aac@44100" -b 192000 -q 127 )
+# Default chosen: 192 kbps AAC with sample rate
+DEFAULT_AF_ARGS=( -f m4af -d "aac" -b 192000 -q 127 )
 
 : "${AF_OPTS:=}"          # optional string of extra/override options
 : "${SKIP_EXISTING:=yes}" # yes -> skip existing outputs; no -> overwrite
