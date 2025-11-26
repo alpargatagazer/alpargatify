@@ -23,42 +23,43 @@ _init_colors() {
 
   # Prefer tput when available for reset
   if command -v tput >/dev/null 2>&1; then
-    # try to get reset
     RESET="$(tput sgr0 2>/dev/null || true)"
   else
-    RESET="\033[0m"
+    RESET=$'\033[0m'
   fi
 
   # Detect 256-color capable terminals (TERM contains 256color)
   if [[ "${TERM:-}" == *256color* ]]; then
     # Orange-like (color 208)
-    ORANGE="\033[38;5;208m"
-    RED="\033[31m"
+    ORANGE=$'\033[38;5;208m'
+    RED=$'\033[31m'
   else
     # Fallback to tput setaf or basic ANSI
     if command -v tput >/dev/null 2>&1; then
-      # tput may return codes; if it fails, fall back to ANSI
-      RED="$(tput setaf 1 2>/dev/null || echo -e '\033[31m')"
-      # no standard tput for "orange" — use yellow
-      ORANGE="$(tput setaf 3 2>/dev/null || echo -e '\033[33m')"
+      RED="$(tput setaf 1 2>/dev/null || true)"
+      ORANGE="$(tput setaf 3 2>/dev/null || true)"
+      # If tput failed return empty, fall back to ANSI
+      [ -z "$RED" ] && RED=$'\033[31m'
+      [ -z "$ORANGE" ] && ORANGE=$'\033[33m'
     else
-      RED="\033[31m"
-      ORANGE="\033[33m"
+      RED=$'\033[31m'
+      ORANGE=$'\033[33m'
     fi
   fi
 
-  # If stdout/stderr not a terminal, disable colors to keep logs clean
+  # If stderr not a terminal, disable colors to keep logs clean
   if [[ ! -t 2 ]]; then
     RED=""
     ORANGE=""
     RESET=""
   fi
 }
-_init_colors
 
-err()   { echo -e "${RED}ERROR:${RESET} $*" >&2; }
-info()  { echo "INFO: $*"; }
-warn()  { echo -e "${ORANGE}WARN:${RESET} $*" >&2; }
+_init_colors
+time_stamp() { date +"%Y-%m-%d %H:%M:%S"; }
+err()  { printf '%s %sERROR:%s %s\n' "$(time_stamp)" "$RED" "$RESET" "$*" >&2; }
+warn() { printf '%s %sWARN:%s %s\n'  "$(time_stamp)" "$ORANGE" "$RESET" "$*" >&2; }
+info() { printf '%s INFO: %s\n' "$(time_stamp)" "$*"; }
 
 cleanup_tmpfiles() {
   if [[ "${TMP_FILES_CREATED:-}" == "1" ]]; then

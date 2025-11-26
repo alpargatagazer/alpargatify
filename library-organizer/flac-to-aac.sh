@@ -1,29 +1,75 @@
 #!/usr/bin/env bash
-# flac-to-aac.sh (modified to preserve metadata)
-# macOS: recursively convert .flac -> AAC (.m4a) using afconvert
+# flac-to-aac.sh - macOS: recursively convert .flac -> AAC (.m4a) using afconvert
 # - preserves source tree under destination
-# - preserve tags (you need to install "metaflag" and "AtomicParsley")
+# - preserves tags (requires metaflac + AtomicParsley; will warn if missing)
 # - env/configurable options via AF_OPTS (see below)
 # - flags: --help, --force (overwrite), --dry-run
-# Based on https://ss64.com/mac/afconvert.html
+#
+# Based on: https://ss64.com/mac/afconvert.html
 
 set -u
 set -o pipefail
 IFS=$'\n\t'
 
-# Defaults (change by editing script or by setting AF_OPTS)
-# Default chosen for "very good quality but small size": 256 kbps AAC
-DEFAULT_AF_ARGS=( -f m4af -d aac -b 192000 -q 127 )
+###############################################################################
+# Colors & logging
+###############################################################################
+_init_colors() {
+  RED=""
+  ORANGE=""
+  RESET=""
 
-# You may set AF_OPTS in the environment to override or append options.
-# Example (append): AF_OPTS='-b 160000' ./flac-to-aac.sh src dest
-# Example (replace): AF_OPTS='-f mp4f -d aac -b 160000 -q 127'
-: "${AF_OPTS:=}"   # optional string of extra/override options
+  # Prefer tput when available for reset
+  if command -v tput >/dev/null 2>&1; then
+    RESET="$(tput sgr0 2>/dev/null || true)"
+  else
+    RESET=$'\033[0m'
+  fi
 
-# Other env flags:
-: "${SKIP_EXISTING:=yes}"   # yes -> skip existing outputs; no -> overwrite
-: "${VERBOSE:=no}"          # yes -> extra debug
-: "${DRY_RUN:=no}"          # yes -> don't execute, just show commands
+  # Detect 256-color capable terminals (TERM contains 256color)
+  if [[ "${TERM:-}" == *256color* ]]; then
+    # Orange-like (color 208)
+    ORANGE=$'\033[38;5;208m'
+    RED=$'\033[31m'
+  else
+    # Fallback to tput setaf or basic ANSI
+    if command -v tput >/dev/null 2>&1; then
+      RED="$(tput setaf 1 2>/dev/null || true)"
+      ORANGE="$(tput setaf 3 2>/dev/null || true)"
+      # If tput failed return empty, fall back to ANSI
+      [ -z "$RED" ] && RED=$'\033[31m'
+      [ -z "$ORANGE" ] && ORANGE=$'\033[33m'
+    else
+      RED=$'\033[31m'
+      ORANGE=$'\033[33m'
+    fi
+  fi
+
+  # If stderr not a terminal, disable colors to keep logs clean
+  if [[ ! -t 2 ]]; then
+    RED=""
+    ORANGE=""
+    RESET=""
+  fi
+}
+
+_init_colors
+time_stamp() { date +"%Y-%m-%d %H:%M:%S"; }
+err()  { printf '%s %sERROR:%s %s\n' "$(time_stamp)" "$RED" "$RESET" "$*" >&2; }
+warn() { printf '%s %sWARN:%s %s\n'  "$(time_stamp)" "$ORANGE" "$RESET" "$*" >&2; }
+info() { printf '%s INFO: %s\n' "$(time_stamp)" "$*"; }
+debug(){ if [ "$VERBOSE" = "yes" ]; then printf '%s DEBUG: %s\n' "$(time_stamp)" "$*"; fi }
+
+###############################################################################
+# Defaults (change by editing script or via AF_OPTS env)
+###############################################################################
+# Default chosen: 192 kbps AAC with 44.1 kHz sample rate
+DEFAULT_AF_ARGS=( -f m4af -d "aac@44100" -b 192000 -q 127 )
+
+: "${AF_OPTS:=}"          # optional string of extra/override options
+: "${SKIP_EXISTING:=yes}" # yes -> skip existing outputs; no -> overwrite
+: "${VERBOSE:=no}"        # yes -> extra debug
+: "${DRY_RUN:=no}"        # yes -> don't execute, just show commands
 
 usage() {
   cat <<EOF
@@ -39,7 +85,7 @@ Flags:
 
 Environment:
   AF_OPTS         optional extra afconvert options (whitespace-separated tokens)
-                  Example: AF_OPTS='-b 160000' ./flac-to-aac.sh src dest
+                  Example: AF_OPTS='-f mp4f -d "aacf@24000" -b 256000 -q 127' ./flac-to-aac.sh src dest
   SKIP_EXISTING   ${SKIP_EXISTING}
   VERBOSE         ${VERBOSE}
   DRY_RUN         ${DRY_RUN}
@@ -60,7 +106,7 @@ while (( "$#" )); do
     --dry-run) DRY_RUN="yes"; shift ;;
     --) shift; break ;;
     -*)
-      echo "Unknown option: $1" >&2
+      err "Unknown option: $1"
       usage
       exit 2
       ;;
@@ -71,7 +117,7 @@ done
 set -- "${POSITIONAL[@]:-}"
 
 if [ "${#}" -ne 2 ]; then
-  echo "Error: source and destination required." >&2
+  err "source and destination required."
   usage
   exit 2
 fi
@@ -96,73 +142,59 @@ DRY_RUN="$(normalize_bool "$DRY_RUN")"
 VERBOSE="$(normalize_bool "$VERBOSE")"
 
 # --- PRECHECKS: macOS and required commands ---
-# Detect macOS (Darwin)
 if [ "$(uname -s)" != "Darwin" ]; then
-  echo "Error: afconvert is macOS-only. This script requires macOS (Darwin)." >&2
+  err "afconvert is macOS-only. This script requires macOS (Darwin)."
   exit 5
-# Ensure afconvert exists
 elif ! command -v afconvert >/dev/null 2>&1; then
-  echo "Error: afconvert not found in PATH. Ensure you're on macOS and Xcode (or Command Line Tools) is installed." >&2
+  err "afconvert not found in PATH. Ensure you're on macOS and Xcode (or Command Line Tools) is installed."
   exit 6
 fi
 
-# Optional tools for metadata (we'll continue if missing but warn)
+# Optional metadata tools
 MISSING_META_TOOLS=""
-if ! command -v metaflac >/dev/null 2>&1; then
-  MISSING_META_TOOLS="$MISSING_META_TOOLS metaflac"
-fi
-if ! command -v AtomicParsley >/dev/null 2>&1; then
-  MISSING_META_TOOLS="$MISSING_META_TOOLS AtomicParsley"
-fi
+if ! command -v metaflac >/dev/null 2>&1; then MISSING_META_TOOLS="$MISSING_META_TOOLS metaflac"; fi
+if ! command -v AtomicParsley >/dev/null 2>&1; then MISSING_META_TOOLS="$MISSING_META_TOOLS AtomicParsley"; fi
 if [ -n "$MISSING_META_TOOLS" ]; then
-  echo "Warning: metadata copying will be skipped or limited because the following tools are missing:$MISSING_META_TOOLS" >&2
+  warn "metadata copying will be skipped or limited because the following tools are missing:$MISSING_META_TOOLS"
 fi
-# --- end prechecks ---
 
 # Sanity checks
 if [ ! -d "$SRC" ]; then
-  echo "Error: source directory does not exist: $SRC" >&2
+  err "source directory does not exist: $SRC"
   exit 3
 fi
-mkdir -p "$DEST" || { echo "Error: cannot create destination: $DEST" >&2; exit 4; }
+mkdir -p "$DEST" || { err "cannot create destination: $DEST"; exit 4; }
 SRC="${SRC%/}"
 
-# Build actual AF_ARGS array:
-AF_ARGS=( "${DEFAULT_AF_ARGS[@]}" )
-
-# If AF_OPTS is set, split it safely into tokens and replace AF_ARGS if user intends to replace.
-# Heuristic: if AF_OPTS contains -f or -d or -b or -q then treat as replacement of defaults.
+# Parse AF_OPTS -- split on whitespace into tokens safely
 if [ -n "${AF_OPTS}" ]; then
-  # split AF_OPTS on whitespace into tokens
-  read -r -a tmp <<< "$AF_OPTS"
-  # if tmp contains any of common root flags, replace defaults (user explicitly provided flags)
-  replace=no
-  for t in "${tmp[@]}"; do
-    case "$t" in -f|-d|-b|-q) replace=yes; break ;; esac
-  done
-  if [ "$replace" = "yes" ]; then
-    AF_ARGS=( "${tmp[@]}" )
-  else
-    AF_ARGS+=( "${tmp[@]}" )
-  fi
+  eval "AF_ARGS=($AF_OPTS)"
+  debug "Using custom AF_OPTS: $(printf '%s ' "${AF_ARGS[@]}" | sed -E 's/[[:space:]]+$//')"
+  debug "Remember that default is: $(printf '%s ' "${DEFAULT_AF_ARGS[@]}" | sed -E 's/[[:space:]]+$//')"
+else
+  AF_ARGS=( "${DEFAULT_AF_ARGS[@]}" )
 fi
 
-vprint() { [ "$VERBOSE" = "yes" ] && printf '%s\n' "$*"; }
+# helper to join arguments into one single-line string for logging
+join_args() {
+  local IFS=' '
+  printf '%s' "$*"
+}
 
-echo "Settings summary:"
-echo "  Source:        $SRC"
-echo "  Destination:   $DEST"
-echo -n "  afconvert args: "
-printf '%s ' "${AF_ARGS[@]}"
-echo
-echo "  SKIP_EXISTING: $SKIP_EXISTING"
-echo "  DRY_RUN:       $DRY_RUN"
-echo "  VERBOSE:       $VERBOSE"
-echo
+info "Settings summary:"
+info "  Source:        $SRC"
+info "  Destination:   $DEST"
+# print AF_ARGS as single-line
+debug "  afconvert args: $(printf '%s ' "${AF_ARGS[@]}" | sed -E 's/[[:space:]]+$//')"
+info "  SKIP_EXISTING: $SKIP_EXISTING"
+info "  DRY_RUN:       $DRY_RUN"
+info "  VERBOSE:       $VERBOSE"
+info ""
 
-# Find and convert .flac files
-find "$SRC" -type f -iname '*.flac' -print0 |
+# Convert .flac files
+# Use find -print0 and a while loop in same shell (avoid piping into while which creates subshell)
 while IFS= read -r -d '' srcfile; do
+  # compute relative path
   if [[ "$srcfile" == "$SRC/"* ]]; then
     relpath="${srcfile:$(( ${#SRC} + 1 ))}"
   else
@@ -176,118 +208,108 @@ while IFS= read -r -d '' srcfile; do
   else
     destdir="$DEST/$dirpart"
   fi
-  mkdir -p "$destdir" || { echo "Warning: could not create $destdir" >&2; continue; }
+  mkdir -p "$destdir" || { warn "could not create $destdir"; continue; }
   destfile="$destdir/$name.m4a"
 
   if [ -e "$destfile" ]; then
     if [ "$SKIP_EXISTING" = "yes" ]; then
-      vprint "Skipping (exists): $destfile"
+      debug "Skipping (exists): $destfile"
       continue
     else
-      rm -f "$destfile" || { echo "Warning: could not remove existing $destfile" >&2; continue; }
+      rm -f "$destfile" || { warn "could not remove existing $destfile"; continue; }
     fi
   fi
 
-  echo "Converting:"
-  echo "  source: $srcfile"
-  echo "  dest:   $destfile"
-
+  info "Converting: $relpath -> ${destfile#$DEST/}"
   if [ "$DRY_RUN" = "yes" ]; then
-    # Print safe, human-readable command
+    # Print safe, human-readable command (single line)
     printf '  -> DRY RUN: afconvert'
     for tok in "${AF_ARGS[@]}"; do printf ' %s' "$tok"; done
     printf ' %q %q\n' "$srcfile" "$destfile"
     continue
   fi
 
-  # Assemble command array and run
+  # assemble command array (array preserves tokenization)
   cmd=(afconvert)
   if [ "${#AF_ARGS[@]}" -gt 0 ]; then
     cmd+=( "${AF_ARGS[@]}" )
   fi
   cmd+=( "$srcfile" "$destfile" )
 
-  # Create one temporary working directory for metadata extraction and ensure cleanup
-  TMPD=""
-  if ! TMPD="$(mktemp -d 2>/dev/null)"; then
-    echo "Warning: could not create global temp dir; metadata operations may fail." >&2
-  else
-    # cleanup on exit/interrupt
-    trap 'rm -rf "$TMPD"' EXIT INT TERM
+  # create a per-file temporary dir and ensure cleanup for that file only
+  TMPD="$(mktemp -d 2>/dev/null || mktemp -d -t flac2aac_tmp 2>/dev/null || true)"
+  if [ -z "$TMPD" ]; then
+    warn "could not create temp dir; metadata operations may fail"
   fi
 
-  vprint "Running: ${cmd[*]}"
+  debug "Running: $(printf '%s ' "${cmd[@]}" | sed -E 's/[[:space:]]+$//')"
+
   if "${cmd[@]}"; then
-    # --- METADATA PRESERVATION ---
-    # Export Vorbis comments + embedded picture from the source FLAC and apply them to the
-    # destination M4A. Errors here are non-fatal and will print warnings only.
-    if command -v metaflac >/dev/null 2>&1 && command -v AtomicParsley >/dev/null 2>&1; then
-      if [ -d "$TMPD" ]; then
-        metafile="$TMPD/meta.txt"
-        # try to export Vorbis comments; metaflac prints TAG=VALUE lines
-        if metaflac --export-tags-to="$metafile" "$srcfile" 2>/dev/null; then
-          ap_args=()
-          while IFS= read -r line || [ -n "$line" ]; do
-            # skip empty lines
-            [ -z "$line" ] && continue
-            key="${line%%=*}"
-            val="${line#*=}"
-            # normalize key to upper-case
-            case "$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')" in
-              TITLE) ap_args+=( --title "$val" ) ;;
-              ARTIST) ap_args+=( --artist "$val" ) ;;
-              ALBUM) ap_args+=( --album "$val" ) ;;
-              TRACKNUMBER) ap_args+=( --tracknum "$val" ) ;;
-              DATE|YEAR) ap_args+=( --year "$val" ) ;;
-              GENRE) ap_args+=( --genre "$val" ) ;;
-              COMMENT) ap_args+=( --comment "$val" ) ;;
-              ALBUMARTIST) ap_args+=( --albumArtist "$val" ) ;;
-              COMPOSER) ap_args+=( --composer "$val" ) ;;
-              DISCNUMBER) ap_args+=( --disk "$val" ) ;;
-              # add more mappings here if needed
+    # metadata copy (best-effort; non-fatal)
+    if command -v metaflac >/dev/null 2>&1 && command -v AtomicParsley >/dev/null 2>&1 && [ -n "$TMPD" ]; then
+      metafile="$TMPD/meta.txt"
+      ap_args=()
+      if metaflac --export-tags-to="$metafile" "$srcfile" 2>/dev/null; then
+        while IFS= read -r line || [ -n "$line" ]; do
+          [ -z "$line" ] && continue
+          key="${line%%=*}"
+          val="${line#*=}"
+          case "$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')" in
+            TITLE) ap_args+=( --title "$val" ) ;;
+            ARTIST) ap_args+=( --artist "$val" ) ;;
+            ALBUM) ap_args+=( --album "$val" ) ;;
+            TRACKNUMBER) ap_args+=( --tracknum "$val" ) ;;
+            DATE|YEAR) ap_args+=( --year "$val" ) ;;
+            GENRE) ap_args+=( --genre "$val" ) ;;
+            COMMENT) ap_args+=( --comment "$val" ) ;;
+            ALBUMARTIST) ap_args+=( --albumArtist "$val" ) ;;
+            COMPOSER) ap_args+=( --composer "$val" ) ;;
+            DISCNUMBER) ap_args+=( --disk "$val" ) ;;
+          esac
+        done < "$metafile"
+
+        picfile="$TMPD/cover"
+        if metaflac --export-picture-to="$picfile" "$srcfile" 2>/dev/null; then
+          if command -v file >/dev/null 2>&1; then
+            ftype=$(file --brief --mime-type "$picfile" 2>/dev/null || echo "image/jpeg")
+            case "$ftype" in
+              image/png) picfile_ext="${picfile}.png" ;;
+              image/jpeg) picfile_ext="${picfile}.jpg" ;;
+              image/*) picfile_ext="${picfile}.img" ;;
+              *) picfile_ext="${picfile}.jpg" ;;
             esac
-          done < "$metafile"
-
-          # try to export embedded picture (cover art). metaflac exits non-zero if no picture.
-          picfile="$TMPD/cover"
-          if metaflac --export-picture-to="$picfile" "$srcfile" 2>/dev/null; then
-            # AtomicParsley expects a file with extension; try to detect image type
-            # by file command if available, otherwise fallback to .jpg
-            if command -v file >/dev/null 2>&1; then
-              ftype=$(file --brief --mime-type "$picfile" 2>/dev/null || echo "image/jpeg")
-              case "$ftype" in
-                image/png) picfile_ext="$picfile.png" ;;
-                image/jpeg) picfile_ext="$picfile.jpg" ;;
-                image/*) picfile_ext="$picfile.img" ;;
-                *) picfile_ext="$picfile.jpg" ;;
-              esac
-              mv "$picfile" "$picfile_ext" 2>/dev/null || true
-            else
-              picfile_ext="$picfile.jpg"
-              mv "$picfile" "$picfile_ext" 2>/dev/null || true
-            fi
-            ap_args+=( --artwork "$picfile_ext" )
+            mv "$picfile" "$picfile_ext" 2>/dev/null || true
+          else
+            picfile_ext="${picfile}.jpg"
+            mv "$picfile" "$picfile_ext" 2>/dev/null || true
           fi
+          ap_args+=( --artwork "$picfile_ext" )
+        fi
 
-          if [ "${#ap_args[@]}" -gt 0 ]; then
-            vprint "Applying metadata with AtomicParsley: ${ap_args[*]}"
-            if AtomicParsley "$destfile" "${ap_args[@]}" --overWrite >/dev/null 2>&1; then
-              vprint "Metadata written to $destfile"
-            else
-              echo "Warning: AtomicParsley failed to write metadata to $destfile" >&2
-            fi
+        if [ "${#ap_args[@]}" -gt 0 ]; then
+          debug "Applying metadata with AtomicParsley: $(printf '%s ' "${ap_args[@]}" | sed -E 's/[[:space:]]+$//')"
+          if AtomicParsley "$destfile" "${ap_args[@]}" --overWrite >/dev/null 2>&1; then
+            debug "Metadata written to $destfile"
+          else
+            warn "AtomicParsley failed to write metadata to $destfile"
           fi
         fi
       fi
     else
-      vprint "metaflac or AtomicParsley not available; skipping metadata copy"
+      debug "metaflac or AtomicParsley not available or temp dir missing; skipping metadata copy"
     fi
 
-    echo "  -> OK"
+    info "  -> OK"
   else
-    echo "  -> ERROR converting $srcfile" >&2
+    err "  -> ERROR converting $srcfile"
     [ -e "$destfile" ] && rm -f "$destfile"
   fi
-done
 
-echo "All done."
+  # cleanup per-file temp dir
+  if [ -n "$TMPD" ] && [ -d "$TMPD" ]; then
+    rm -rf "$TMPD" || true
+  fi
+
+done < <(find "$SRC" -type f -iname '*.flac' -print0)
+
+info "All done."
