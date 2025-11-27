@@ -1,3 +1,13 @@
+## Global options
+{   
+    # Admin accesible only in this virtual network
+    admin caddy:2019
+    # Enable per-host metrics
+    metrics {
+        per_host
+    }
+}
+
 ## Add http:// as a prefix for each item for testing
 
 # Navidrome

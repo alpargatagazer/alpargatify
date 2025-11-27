@@ -28,4 +28,3 @@ services:
 
 networks:
   navidrome:
-    driver: bridge
