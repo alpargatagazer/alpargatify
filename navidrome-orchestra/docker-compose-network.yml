@@ -37,4 +37,3 @@ services:
     networks:
       - internal
     restart: unless-stopped
-

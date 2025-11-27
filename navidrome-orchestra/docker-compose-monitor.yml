@@ -20,9 +20,9 @@ services:
       - monitoring
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget --quiet --tries=1 --timeout=3 -O - http://127.0.0.1:3000/ || exit 1"]
-      interval: 1m
-      timeout: 10s
+      test: ["CMD", "sh", "-c", "curl --fail -sS http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
       retries: 3
 
   prometheus:
@@ -49,9 +49,9 @@ services:
       - caddy-with-admin
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget --quiet --tries=1 --timeout=3 -O - http://127.0.0.1:9090/ || exit 1"]
-      interval: 1m
-      timeout: 10s
+      test: ["CMD", "sh", "-c", "curl --fail http://127.0.0.1:9090/-/ready >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
       retries: 3
 
   cadvisor:
