@@ -1,4 +1,5 @@
 services:
+
   caddy:
     image: caddy:2.10
     container_name: caddy

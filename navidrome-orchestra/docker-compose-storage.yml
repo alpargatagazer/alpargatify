@@ -1,4 +1,5 @@
 services:
+
   sftp:
     image: atmoz/sftp:alpine-3.7
     container_name: sftp
