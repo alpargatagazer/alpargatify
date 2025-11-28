@@ -21,11 +21,6 @@ scrape_configs:
       username: '<wud_admin_user>'
       password: '<wud_admin_password>'
 
-  - job_name: 'cadvisor'
-    metrics_path: <custom_metrics_path>
-    static_configs:
-      - targets: ['cadvisor:8080']
-
   - job_name: 'node'
     metrics_path: <custom_metrics_path>
     static_configs:

@@ -6,7 +6,7 @@ This folder contains the Docker Compose files, configuration templates and helpe
 
 ## Summary
 - **Core**: `docker-compose-core.yml` — runs **Navidrome** and an init helper to set ownership.
-- **Monitor**: `docker-compose-monitor.yml` — runs **Prometheus**, **Grafana**, **cAdvisor**, and **node-exporter** for observability.
+- **Monitor**: `docker-compose-monitor.yml` — runs **Prometheus**, **Grafana** and **node-exporter** for observability.
 - **Network**: `docker-compose-network.yml` — runs **Caddy** (TLS/HTTP reverse proxy) and, optionally, **ddclient** for dynamic DNS.
 - **Storage / Extras**: `docker-compose-storage.yml` & `docker-compose-extratools.yml` — run **SFTP**, **Syncthing**, **FileBrowser** and **WUD** (web UI for triggers/management).
 - **Bootstrap helper**: `bootstrap.sh` — prepares directories, renders config templates, validates environment and launches the composed services.
@@ -21,7 +21,7 @@ This folder contains the Docker Compose files, configuration templates and helpe
 - **WUD**: web UI that can trigger compose actions (optional, profile-enabled).
 
 ## What this is for
-This setup is intended to run on a remote server (VPS or VM). It brings up a robust music server (**Navidrome**) and a small set of microservices that help operate and observe that server: TLS routing and certificates (**Caddy**), metrics collection and dashboards (**Prometheus** + **Grafana**), container-level exporters (**node-exporter** and **cAdvisor**), storage/exchange helpers (**Syncthing**, **FileBrowser**, **SFTP**), and a management UI to make sure your containers are updated (**WUD**).
+This setup is intended to run on a remote server (VPS or VM). It brings up a robust music server (**Navidrome**) and a small set of microservices that help operate and observe that server: TLS routing and certificates (**Caddy**), metrics collection and dashboards (**Prometheus** + **Grafana**), container-level exporters (**node-exporter**), storage/exchange helpers (**Syncthing**, **FileBrowser**, **SFTP**), and a management UI to make sure your containers are updated (**WUD**).
 
 ## Before you begin
 - Fill in the `./.env` file located next to `bootstrap.sh`. The script requires several variables to be present (see list below).
@@ -83,7 +83,7 @@ Implementation notes about profiles:
 - **Caddy** (`docker-compose-network.yml`): TLS termination and routing to internal services (exposes ports 80 and 443). Uses `configs/Caddyfile.custom` after rendering.
 - **Prometheus** (`docker-compose-monitor.yml`): scrapes metrics from services (including Navidrome at the generated `CUSTOM_METRICS_PATH`). Rendered config is `configs/prometheus.yml.custom`.
 - **Grafana** (`docker-compose-monitor.yml`): dashboard for Prometheus data and pre-provisioned dashboards in `grafana-dashboards/`.
-- **cAdvisor** and **node-exporter** (`docker-compose-monitor.yml`): provide container and host metrics for Prometheus.
+- **node-exporter** (`docker-compose-monitor.yml`): provide container and host metrics for Prometheus.
 - **SFTP** (`docker-compose-storage.yml`): exposes SFTP access to the `NAVIDROME_MUSIC_PATH` for uploads or remote sync.
 - **Syncthing** (`docker-compose-storage.yml`, profile `extra-storage`): optional synchronisation service that can mirror music folders between hosts.
 - **FileBrowser** (`docker-compose-storage.yml`, profile `extra-storage`): web UI for browsing and managing files inside the music folder.

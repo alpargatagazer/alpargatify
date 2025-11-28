@@ -41,10 +41,10 @@
 }
 
 # Internal monitoring endpoints - do NOT expose to the internet
-<protocol>://cadvisor.<domain> {
+<protocol>://prometheus.<domain> {
     @allowed client_ip 127.0.0.1 172.16.0.0/8 192.168.0.0/16
     handle @allowed {
-        reverse_proxy cadvisor:8080
+        reverse_proxy prometheus:9090
     }
     handle {
         abort

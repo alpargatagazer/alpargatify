@@ -20,7 +20,7 @@ This is a small collection of tools and orchestrations to run a personal music s
 - **beets** — tools used in the library-organizer for tagging/organization.
 
 ## Folder overview
-- `navidrome-orchestra/`: A lightweight orchestration and observability stack centered on **Navidrome**. It contains Docker Compose files, configuration templates and helper scripts to run Navidrome together with optional services such as **Caddy**, **Prometheus**, **Grafana**, **node-exporter**, **cAdvisor**, **Syncthing**, **FileBrowser**, **SFTP** and the optional **WUD** management UI. See `navidrome-orchestra/README.md` for full details and usage instructions.
+- `navidrome-orchestra/`: A lightweight orchestration and observability stack centered on **Navidrome**. It contains Docker Compose files, configuration templates and helper scripts to run Navidrome together with optional services such as **Caddy**, **Prometheus**, **Grafana**, **node-exporter**, **Syncthing**, **FileBrowser**, **SFTP** and the optional **WUD** management UI. See `navidrome-orchestra/README.md` for full details and usage instructions.
 - `library-organizer/`: Tools and helper scripts to organize music libraries and transcode files. Includes a `beets` configuration and helper wrappers to run tagging and conversion workflows. See `library-organizer/README.md` for details.
 
 ## Server bootstrap helper
