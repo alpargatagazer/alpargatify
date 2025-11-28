@@ -1,4 +1,5 @@
 services:
+
   sftp:
     image: atmoz/sftp:alpine-3.7
     container_name: sftp
@@ -7,7 +8,7 @@ services:
     command:
       - ${SFTP_USER}:${SFTP_PASSWORD}:${PUID}:${PGID}
     volumes:
-      - ${NAVIDROME_MUSIC_PATH}:/home/${SFTP_USER}:rw
+      - ${NAVIDROME_MUSIC_PATH}:/home/${SFTP_USER}/music:rw
     ports:
       - "${SFTP_PORT}:22"
     networks:
@@ -16,6 +17,7 @@ services:
 
   syncthing:
     image: syncthing/syncthing:2.0.11
+    user: ${PUID}:${PGID}
     profiles: ["extra-storage"]
     container_name: syncthing
     labels:
@@ -43,13 +45,14 @@ services:
       - frontend
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget --quiet --tries=1 --timeout=3 -O - http://127.0.0.1:8384/ || exit 1"]
-      interval: 1m
-      timeout: 10s
+      test: ["CMD", "sh", "-c", "curl --fail -sS http://127.0.0.1:8384/rest/system/ping >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
       retries: 3
 
   filebrowser:
     image: filebrowser/filebrowser:v2.49.0
+    user: ${PUID}:${PGID}
     profiles: ["extra-storage"]
     container_name: filebrowser
     labels:

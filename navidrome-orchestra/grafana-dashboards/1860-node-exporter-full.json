@@ -15758,8 +15758,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Node Exporter Full",
-  "uid": "rYdddlPWk",
+  "title": "Node Exporter",
+  "uid": "node-exporter-dashboard",
   "version": 98,
   "weekStart": "",
   "gnetId": 1860

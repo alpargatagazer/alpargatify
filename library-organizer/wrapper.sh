@@ -12,7 +12,7 @@
 #   --verbose              : add debug logging
 #
 # Usage:
-#   ./wrapper.sh [--force] [--dry-run] [--beets-config /abs/path/to/beets_config.yaml] \
+#   ./wrapper.sh [--dry-run] [--beets-config /abs/path/to/beets_config.yaml] \
 #                [--convert-only|--import-only|--order-only|--tag-only] \
 #                /path/to/source /absolute/path/to/music_library_root
 
@@ -73,14 +73,13 @@ debug(){ if [ "${VERBOSE:-no}" = "yes" ]; then printf '%s DEBUG: %s\n' "$(time_s
 ###############################################################################
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BEETS_CONFIG="$SCRIPT_DIR/beets/beets_config.yaml"
-FORCE="no"
 DRY_RUN="no"
 MODE="full" # values: full, convert-only, import-only, order-only, tag-only
 VERBOSE="no"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--force] [--dry-run] [--beets-config /path/to/beets_config.yaml] \
+Usage: $(basename "$0") [--dry-run] [--beets-config /path/to/beets_config.yaml] \
        [--convert-only | --import-only | --order-only | --tag-only] \
        /path/to/source /absolute/path/to/music_library_root
 
@@ -101,7 +100,6 @@ EOF
 POSITIONAL=()
 while (( "$#" )); do
   case "$1" in
-    --force) FORCE="yes"; shift ;;
     --dry-run) DRY_RUN="yes"; shift ;;
     --beets-config) BEETS_CONFIG="$2"; shift 2 ;;
     --convert-only) MODE="convert-only"; shift ;;
@@ -157,7 +155,6 @@ info "Source (input):     $SRC"
 info "Music library root: $DEST"
 info "Converter:          $CONVERTER"
 info "Beets config:       $BEETS_CONFIG"
-info "Force:              $FORCE"
 info "Dry run:            $DRY_RUN"
 info "Mode:               $MODE"
 info "================"
@@ -181,7 +178,6 @@ trap cleanup EXIT
 # Helper: run converter (writes into TMP_DEST)
 run_converter() {
   conv_args=()
-  [ "$FORCE" = "yes" ] && conv_args+=(--force)
   [ "$DRY_RUN" = "yes" ] && conv_args+=(--dry-run)
   conv_args+=( "$SRC" "$TMP_DEST" )
 

@@ -1,5 +1,5 @@
 ## Global options
-{   
+{
     # Admin accesible only in this virtual network
     admin caddy-admin:2019
     # Enable per-host metrics
@@ -8,39 +8,41 @@
     }
 }
 
-## Add http:// as a prefix for each item for testing
-navidrome.<domain> {
+<protocol>://<domain> {
     reverse_proxy navidrome:4533
 }
 
-wud.<domain> {
+<protocol>://<domain>:4533 {
+    redir <protocol>://<domain>{uri} permanent
+}
+
+<protocol>://wud.<domain> {
     route {
         reverse_proxy wud:2999
     }
 }
 
-grafana.<domain> {
+<protocol>://grafana.<domain> {
     route {
         reverse_proxy grafana:3000
     }
 }
 
-syncthing.<domain> {
+<protocol>://syncthing.<domain> {
     route {
         reverse_proxy syncthing:8384
     }
 }
 
-filebrowser.<domain> {
+<protocol>://filebrowser.<domain> {
     route {
         reverse_proxy filebrowser:8080
     }
 }
 
 # Internal monitoring endpoints - do NOT expose to the internet
-# We respond with abort for public requests; Caddy will still proxy if the client is in allowed ranges (e.g., local network / your admin IP).
-http://cadvisor.<domain> {
-    @allowed client_ip 127.0.0.1 192.168.1.0/24 10.0.0.0/8
+<protocol>://cadvisor.<domain> {
+    @allowed client_ip 127.0.0.1 172.16.0.0/8 192.168.0.0/16
     handle @allowed {
         reverse_proxy cadvisor:8080
     }

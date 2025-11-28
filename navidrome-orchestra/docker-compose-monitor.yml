@@ -2,6 +2,7 @@ services:
 
   grafana:
     image: grafana/grafana:12.3
+    user: ${PUID}:${PGID}
     profiles: ["monitoring"]
     container_name: grafana
     labels:
@@ -11,8 +12,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
-      - ./configs/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
-      - ./configs/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/main.yaml
+      - ./configs/grafana-datasources.yml:/etc/grafana/provisioning/datasources/provisioner.yaml
+      - ./configs/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/provisioner.yaml
       - ${VOLUMES_PATH}/grafana:/var/lib/grafana
       - ./grafana-dashboards:/var/lib/grafana/dashboards
     networks:
@@ -20,13 +21,14 @@ services:
       - monitoring
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget --quiet --tries=1 --timeout=3 -O - http://127.0.0.1:3000/ || exit 1"]
-      interval: 1m
-      timeout: 10s
+      test: ["CMD", "sh", "-c", "curl --fail -sS http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
       retries: 3
 
   prometheus:
     image: prom/prometheus:v3.7.3
+    user: ${PUID}:${PGID}
     profiles: ["monitoring"]
     container_name: prometheus
     labels:
@@ -49,9 +51,9 @@ services:
       - caddy-with-admin
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget --quiet --tries=1 --timeout=3 -O - http://127.0.0.1:9090/ || exit 1"]
-      interval: 1m
-      timeout: 10s
+      test: ["CMD", "sh", "-c", "curl --fail http://127.0.0.1:9090/-/ready >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
       retries: 3
 
   cadvisor:
@@ -64,9 +66,13 @@ services:
       - --prometheus_endpoint=${CUSTOM_METRICS_PATH}
     volumes:
       - /:/rootfs:ro
-      - /var/run:/var/run:rw
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+      - /var/run:/var/run:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /dev/disk/:/dev/disk
+    devices: 
+      - /dev/kmsg
     networks:
       - frontend
       - monitoring
