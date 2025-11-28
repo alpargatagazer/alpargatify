@@ -2,6 +2,7 @@ services:
 
   grafana:
     image: grafana/grafana:12.3
+    user: ${PUID}:${PGID}
     profiles: ["monitoring"]
     container_name: grafana
     labels:
@@ -27,6 +28,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.7.3
+    user: ${PUID}:${PGID}
     profiles: ["monitoring"]
     container_name: prometheus
     labels:

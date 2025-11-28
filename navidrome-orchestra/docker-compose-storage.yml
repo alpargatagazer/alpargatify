@@ -8,7 +8,7 @@ services:
     command:
       - ${SFTP_USER}:${SFTP_PASSWORD}:${PUID}:${PGID}
     volumes:
-      - ${NAVIDROME_MUSIC_PATH}:/home/${SFTP_USER}:rw
+      - ${NAVIDROME_MUSIC_PATH}:/home/${SFTP_USER}/music:rw
     ports:
       - "${SFTP_PORT}:22"
     networks:
@@ -17,6 +17,7 @@ services:
 
   syncthing:
     image: syncthing/syncthing:2.0.11
+    user: ${PUID}:${PGID}
     profiles: ["extra-storage"]
     container_name: syncthing
     labels:
@@ -51,6 +52,7 @@ services:
 
   filebrowser:
     image: filebrowser/filebrowser:v2.49.0
+    user: ${PUID}:${PGID}
     profiles: ["extra-storage"]
     container_name: filebrowser
     labels:

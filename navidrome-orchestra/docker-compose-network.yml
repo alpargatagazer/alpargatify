@@ -2,6 +2,7 @@ services:
 
   caddy:
     image: caddy:2.10
+    user: ${PUID}:${PGID}
     container_name: caddy
     labels:
       - 'wud.tag.include=^\d+\.\d+$'
@@ -23,6 +24,7 @@ services:
   
   ddclient:
     image: linuxserver/ddclient:4.0.0
+    user: ${PUID}:${PGID}
     profiles: ["dinamic-ip"]
     container_name: ddclient
     labels:

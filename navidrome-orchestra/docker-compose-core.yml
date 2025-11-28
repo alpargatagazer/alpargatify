@@ -1,12 +1,12 @@
 services:
   navidrome:
     image: deluan/navidrome:0.58.5
+    user: ${PUID}:${PGID}
     container_name: navidrome
     labels:
       - 'wud.tag.include=^\d+\.\d+\.\d+$'
-    user: ${PUID}:${PGID}
     environment:
-      ND_CONFIGFILE: /data/navidrome.toml
+      ND_CONFIGFILE: /navidrome.toml
       ND_LASTFM_APIKEY: ${LASTFM_APIKEY}
       ND_LASTFM_SECRET: ${LASTFM_SECRET}
       ND_PROMETHEUS_METRICSPATH: ${CUSTOM_METRICS_PATH}
@@ -15,7 +15,7 @@ services:
     volumes:
       - "${NAVIDROME_MUSIC_PATH}:/music:ro"
       - "${VOLUMES_PATH}/navidrome:/data"
-      - "./configs/navidrome.toml:/data/navidrome.toml:ro"
+      - "./configs/navidrome.toml:/navidrome.toml:ro"
       - "${BACKGROUNDS_PATH}:/backgrounds:ro"
     networks:
       - frontend
@@ -26,6 +26,35 @@ services:
       interval: 1m
       timeout: 10s
       retries: 3
+
+  init-chown:
+    image: alpine:3.22
+    container_name: init-chown
+    labels:
+      - 'wud.tag.include=^\d+\.\d+\$'
+    # run as root (default) and perform a safe chown only when /volumes and /music exists
+    command: >
+      sh -euxc '
+        if [ -d /volumes ]; then
+          echo "Init: fixing ownership of /volumes to ${PUID:-1000}:${PGID:-1000}";
+          chown -R ${PUID:-1000}:${PGID:-1000} /volumes || true;
+        else
+          echo "Init: /volumes not found, skipping";
+        fi
+        if [ -d /music ]; then
+          echo "Init: fixing ownership of /music to ${PUID:-1000}:${PGID:-1000}";
+          chown -R ${PUID:-1000}:${PGID:-1000} /music || true;
+        else
+          echo "Init: /music not found, skipping";
+        fi
+      '
+    volumes:
+      - ${VOLUMES_PATH}:/volumes:rw
+      - ${NAVIDROME_MUSIC_PATH}:/music:rw
+    networks:
+      - internal
+    # do not restart; it's a one-shot
+    restart: "no"
 
 networks:
   internal:
