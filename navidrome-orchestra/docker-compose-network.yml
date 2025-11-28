@@ -13,6 +13,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "4533:4533"
     networks:
       frontend:
       caddy-with-admin:

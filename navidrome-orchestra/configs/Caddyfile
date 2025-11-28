@@ -12,6 +12,10 @@
     reverse_proxy navidrome:4533
 }
 
+<protocol>://<domain>:4533 {
+    redir <protocol>://<domain>{uri} permanent
+}
+
 <protocol>://wud.<domain> {
     route {
         reverse_proxy wud:2999
