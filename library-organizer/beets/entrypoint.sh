@@ -29,7 +29,7 @@ BEET_BASE=(beet -c "$CONFIG_PATH")
 # Compose the final beet import command based on mode and dry run
 if [ "$VERBOSE" = "yes" ]; then
   # add verbose
-  BEET_CMD+=(-v)
+  BEET_BASE+=(-v)
 fi
 BEET_CMD=("${BEET_BASE[@]}" import)
 if [ "$DRY_RUN" = "yes" ]; then
