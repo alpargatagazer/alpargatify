@@ -389,7 +389,8 @@ pushd "$SCRIPT_DIR/beets" >/dev/null
 # Run compose with:
 #   --build: rebuild image if Dockerfile changed
 #   --abort-on-container-exit: stop all containers when the import finishes
-VERBOSE=${VERBOSE} compose -f docker-compose.yml up --build --abort-on-container-exit
+export PROJECT_NAME=$(basename "$SRC" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/_\+/_/g' | sed 's/^_//;s/_$//')
+VERBOSE=${VERBOSE} compose -p "library-organizer" -f docker-compose.yml up --build --abort-on-container-exit
 EXIT_CODE=$?
 
 # Return to original directory

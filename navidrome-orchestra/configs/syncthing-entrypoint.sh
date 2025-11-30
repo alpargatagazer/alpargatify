@@ -27,6 +27,29 @@ fi
 # 2) Ensure music path exists (so Syncthing won't fail to use it)
 mkdir -p "$MUSIC_PATH"
 
+# 2a) Ensure the synced folder ignores macOS .DS_Store files.
+# Use the (?d) prefix so these OS-generated files are allowed to be removed
+# if they block directory deletion (per Syncthing docs).
+STIGNORE_FILE="${MUSIC_PATH}/.stignore"
+STIGNORE_PATTERN='(?d).DS_Store'
+
+# Create .stignore if missing, or append the pattern if not present.
+# Use fixed-string grep (-F) to avoid regex interpretation of the pattern.
+if [ -f "$STIGNORE_FILE" ]; then
+  if ! grep -Fqx "$STIGNORE_PATTERN" "$STIGNORE_FILE"; then
+    echo "$STIGNORE_PATTERN" >> "$STIGNORE_FILE"
+    # ensure file is owned by the container user so Syncthing can read it
+    chown "${PUID:-0}:${PGID:-0}" "$STIGNORE_FILE" || true
+    echo "Appended .DS_Store ignore pattern to $STIGNORE_FILE"
+  else
+    echo ".stignore already contains .DS_Store ignore pattern — skipping."
+  fi
+else
+  printf "%s\n" "$STIGNORE_PATTERN" > "$STIGNORE_FILE"
+  chown "${PUID:-0}:${PGID:-0}" "$STIGNORE_FILE" || true
+  echo "Created $STIGNORE_FILE with .DS_Store ignore pattern."
+fi
+
 # 3) Decide on folder id (generate if empty)
 if [ -z "$FOLDER_ID" ]; then
   # 40 hex-ish chars; unique enough for folder id
