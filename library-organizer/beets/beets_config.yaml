@@ -95,5 +95,5 @@ lastgenre:
   count: 5
 
 lyrics:
-  sources: [genius, lrclib]
+  sources: [genius,]
   synced: yes
