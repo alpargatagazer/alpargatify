@@ -13,17 +13,22 @@ library: /data/library.db
 threaded: yes
 
 import:
-  # These values can be overriden by the wrapper script via flags
-  move: yes        # move files into the library
-  copy: no
-  write: yes       # write metadata to files
-  singletons: no
-  resume: yes
-  incremental: no
-  quiet: yes
-  autotag: yes
-  # On duplicate, remove the old item
-  duplicate_action: remove
+  # These values can be overridden by the wrapper script via flags
+  move: yes                 # Move files from the import folder into the library directory
+  copy: no                  # Do not copy files; only move them
+  write: yes                # Write metadata (tags) to the files after importing
+  singletons: no            # Do not treat albums with a single track as standalone albums
+  resume: yes               # Resume interrupted imports where possible
+  incremental: no           # Do not import only new/unseen files; process everything
+  quiet: yes                # Run in non-interactive mode; do not prompt for choices
+  autotag: yes              # Automatically fetch and apply metadata from MusicBrainz or other sources
+  duplicate_action: remove  # If a duplicate is found, remove the old item before importing the new one
+
+match:
+  # Thresholds for matching candidate albums; values range from 0.0 (perfect) to 1.0 (completely different)
+  # Lower thresholds make beets more strict; higher thresholds accept more distant matches automatically
+  strong_rec_thresh: 0.30   # Distance below this is considered a strong match and will be automatically accepted
+  medium_rec_thresh: 0.50   # Distance below this is considered a medium match; may require confirmation in interactive mode (this is a problem since we execute it automatically)
 
 # Keep cover art handling minimal
 art_filename: cover
@@ -90,4 +95,5 @@ lastgenre:
   count: 5
 
 lyrics:
-  sources: [genius, ]
+  sources: [genius,]
+  synced: yes

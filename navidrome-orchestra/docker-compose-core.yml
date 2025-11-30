@@ -13,6 +13,8 @@ services:
       ND_PROMETHEUS_METRICSPATH: ${CUSTOM_METRICS_PATH}
       ND_PROMETHEUS_PASSWORD: ${NAVIDROME_METRICS_PASSWORD}
       ND_UILOGINBACKGROUNDURL: /backgrounds
+      # Backups are saved under your Navidrome volume
+      ND_BACKUP_PATH: /data/backup/
     volumes:
       - "${NAVIDROME_MUSIC_PATH}:/music:ro"
       - "${VOLUMES_PATH}/navidrome:/data"

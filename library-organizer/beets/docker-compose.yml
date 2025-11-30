@@ -3,7 +3,7 @@ services:
     build:
       context: .
     image: local/beets:latest
-    container_name: beets_importer
+    container_name: "beets-${PROJECT_NAME}"
     volumes:
       # These variables are set in the wrapper
       - "${DEST_PATH}:/data:rw"

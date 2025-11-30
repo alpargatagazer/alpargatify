@@ -85,7 +85,7 @@ Implementation notes about profiles:
 - **Grafana** (`docker-compose-monitor.yml`): dashboard for Prometheus data and pre-provisioned dashboards in `grafana-dashboards/`.
 - **node-exporter** (`docker-compose-monitor.yml`): provide container and host metrics for Prometheus.
 - **SFTP** (`docker-compose-storage.yml`): exposes SFTP access to the `NAVIDROME_MUSIC_PATH` for uploads or remote sync.
-- **Syncthing** (`docker-compose-storage.yml`, profile `extra-storage`): optional synchronisation service that can mirror music folders between hosts.
+- **Syncthing** (`docker-compose-storage.yml`, profile `extra-storage`): optional synchronisation service that can mirror music folders between hosts. Two folders are created at its init: one for syncing your music with a remote server and the other to sync the **Navidrome** backups. 
 - **FileBrowser** (`docker-compose-storage.yml`, profile `extra-storage`): web UI for browsing and managing files inside the music folder.
 - **WUD** (`docker-compose-extratools.yml`, profile `wud`): optional management web UI that can trigger docker-compose actions based on the bundled compose files. Useful for remote triggers and scheduled actions — keep it disabled if you do not want remote-trigger abilities.
 - **ddclient** (`docker-compose-network.yml`, profile `dinamic-ip`): optional dynamic DNS client (requires `CLOUDFLARE_API_TOKEN`) for hosts without static IP. This has not been tested, so it might fail.
