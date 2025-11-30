@@ -16,9 +16,8 @@ TranscodingCacheSize = "100MB"
 UIWelcomeMessage = "Gracias por estar aquí"
 
 [Backup]
-Path = "/data/backup/"
-Count = 3
-Schedule =  "0 0 * * 0" # Every Sunday at midnight
+Count = 5
+Schedule =  "0 4 * * 2,4,0" # Every Tuesday, Thursday and Sunday at 4AM
 
 [Deezer]
 Enabled = true

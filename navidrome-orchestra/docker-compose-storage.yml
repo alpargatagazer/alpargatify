@@ -28,13 +28,13 @@ services:
       - PGID=${PGID}
       - GUI_USER=${SYNCTHING_GUI_USER}
       - GUI_PASSWORD=${SYNCTHING_GUI_PASSWORD}
-      - FOLDER_ID=${SYNCTHING_FOLDER_ID}
-      - FOLDER_LABEL=${SYNCTHING_FOLDER_LABEL}
     volumes:
       # Syncthing config directory (will contain config.xml, key, index, etc.)
       - ${VOLUMES_PATH}/syncthing:/var/syncthing:rw
       # Mount the actual music folder used by Navidrome so Syncthing reads/writes into it
       - ${NAVIDROME_MUSIC_PATH}:/srv/music:rw
+      # Mount the folder where Navidrome is saving its backups
+      - ${VOLUMES_PATH}/navidrome/backup:/srv/backups:rw
       # Custom entrypoint script to initialize Syncthing with our desired settings
       - ./configs/syncthing-entrypoint.sh:/usr/local/bin/docker-entrypoint.sh:ro
     ports:
