@@ -30,9 +30,6 @@ match:
   strong_rec_thresh: 0.30   # Distance below this is considered a strong match and will be automatically accepted
   medium_rec_thresh: 0.50   # Distance below this is considered a medium match; may require confirmation in interactive mode (this is a problem since we execute it automatically)
 
-# Keep cover art handling minimal
-art_filename: cover
-
 # Preserve original date instead of publishing information when writing tags
 original_date: yes
 
@@ -93,7 +90,31 @@ lastgenre:
   force: yes
   keep_existing: no
   count: 5
+  canonical: yes
+  prefer_specific: yes
+
+art_filename: cover
+
+fetchart:
+  auto: yes                 # fetch art automatically during import
+  cautious: yes             # prefer trusted filenames (cover/front/etc.)
+  cover_names: front cover album folder art
+  minwidth: 500             # ignore tiny images (px)
+  maxwidth: 1400            # downscale very large images to at most this width (px)
+  quality: 75               # JPEG compression quality when downscaling (1-100). 65-75 is a good range.
+  max_filesize: 800000      # attempt to keep downloaded cover <= 800000 bytes (~800 KB)
+  enforce_ratio: 0.5%       # accept images that are approx square (allow small deviation)
+  sources:
+    - coverart: release     # coverart (Cover Art Archive) by release id first
+    - fanarttv
+    - itunes
+    - amazon
+    - filesystem
+  store_source: no          # do not store art source tag (set yes if you want provenance)
+  high_resolution: no       # disable extremely high-res images (>20MB risk)
+  deinterlace: no           # keep progressive JPEGs by default
+  cover_format: JPEG        # force JPEG output (keeps filesize smaller than PNG)
 
 lyrics:
-  sources: [genius,]
+  sources: [genius, lrclib]
   synced: yes
