@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 
+# Environment variables with defaults
 : "${FILEBROWSER_ADMIN_USER}"
 : "${FILEBROWSER_ADMIN_PASSWORD}"
 : "${DB_DIR:=/database}"
@@ -8,81 +9,134 @@ set -eu
 : "${ROOT_DIR:=/srv/music}"
 : "${PORT:=8080}"
 : "${ADDRESS:=0.0.0.0}"
-: "${FB_TIMEOUT:=15}"   # seconds to wait for DB file creation during quick-setup
+: "${FB_TIMEOUT:=15}"
+: "${PUID:=0}"
+: "${PGID:=0}"
 
-# Create dirs and ensure mounts exist
-mkdir -p "$DB_DIR"
-mkdir -p "$ROOT_DIR"
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
 
-# best-effort chmod/chown to match host UID/GID (ignore errors)
-# note: adjust if you prefer not to chown
-chown -R "${PUID}:${PGID}" "$DB_DIR" "$ROOT_DIR" || true
-chmod -R u+rw "$DB_DIR" "$ROOT_DIR" || true
+log() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+}
 
-# Helper to start filebrowser as quick-setup (background)
+# Start temporary filebrowser instance to bootstrap database
 start_quick_setup() {
-  echo "Starting temporary filebrowser quick-setup to bootstrap DB and initial user..."
-  # run filebrowser in background with username/password so it bootstraps DB
-  filebrowser -r "$ROOT_DIR" -d "$DB_FILE" --username "$FILEBROWSER_ADMIN_USER" --password "$FILEBROWSER_ADMIN_PASSWORD" --port "$PORT" --address "$ADDRESS" >/tmp/filebrowser-quick.log 2>&1 &
-  FB_PID=$!
-  # wait for DB file to appear (timeout)
-  i=0
-  while [ ! -f "$DB_FILE" ] && [ $i -lt "$FB_TIMEOUT" ]; do
+  log "Starting temporary filebrowser to bootstrap database..."
+  
+  local log_file="/tmp/filebrowser-quick.log"
+  
+  filebrowser -r "$ROOT_DIR" \
+              -d "$DB_FILE" \
+              --username "$FILEBROWSER_ADMIN_USER" \
+              --password "$FILEBROWSER_ADMIN_PASSWORD" \
+              --port "$PORT" \
+              --address "$ADDRESS" >"$log_file" 2>&1 &
+  
+  local fb_pid=$!
+  local elapsed=0
+  
+  # Wait for DB file creation
+  while [ ! -f "$DB_FILE" ] && [ $elapsed -lt "$FB_TIMEOUT" ]; do
     sleep 1
-    i=$((i+1))
+    elapsed=$((elapsed + 1))
   done
-
+  
   if [ -f "$DB_FILE" ]; then
-    echo "Database created at $DB_FILE by quick-setup."
+    log "Database created successfully at $DB_FILE"
   else
-    echo "Timed out waiting for DB creation. Dumping quick-setup log:" >&2
-    sed -n '1,200p' /tmp/filebrowser-quick.log || true
+    log "ERROR: Timed out waiting for database creation after ${FB_TIMEOUT}s" >&2
+    log "Quick-setup log (first 200 lines):" >&2
+    head -n 200 "$log_file" 2>/dev/null || true
   fi
-
-  # gracefully stop the temporary server if still running
-  if kill -0 "$FB_PID" 2>/dev/null; then
-    echo "Stopping temporary quick-setup process (pid $FB_PID)..."
-    kill "$FB_PID"
-    # give it a little time to stop
+  
+  # Stop temporary process
+  if kill -0 "$fb_pid" 2>/dev/null; then
+    log "Stopping temporary quick-setup process (pid $fb_pid)..."
+    kill "$fb_pid" 2>/dev/null || true
     sleep 1
-    if kill -0 "$FB_PID" 2>/dev/null; then
-      kill -9 "$FB_PID" || true
+    kill -0 "$fb_pid" 2>/dev/null && kill -9 "$fb_pid" 2>/dev/null || true
+  fi
+}
+
+# Check if user exists in database
+user_exists() {
+  local username="$1"
+  
+  if ! filebrowser users ls -d "$DB_FILE" 2>/dev/null; then
+    return 1
+  fi
+  
+  filebrowser users ls -d "$DB_FILE" 2>/dev/null | \
+    awk '{print $2}' | \
+    grep -qx -- "$username"
+}
+
+# Create or update admin user
+ensure_admin_user() {
+  local username="$FILEBROWSER_ADMIN_USER"
+  local password="$FILEBROWSER_ADMIN_PASSWORD"
+  
+  if user_exists "$username"; then
+    log "User '$username' exists — updating password and admin permissions"
+    if ! filebrowser users update "$username" \
+           --password "$password" \
+           --perm.admin \
+           -d "$DB_FILE" 2>/dev/null; then
+      log "WARNING: Failed to update user '$username'" >&2
+    fi
+  else
+    log "Creating admin user '$username'"
+    if ! filebrowser users add "$username" "$password" \
+           --perm.admin \
+           -d "$DB_FILE" 2>/dev/null; then
+      log "WARNING: Failed to create user '$username'" >&2
     fi
   fi
 }
 
-# Check if DB exists
+# ============================================================================
+# 1) INITIALIZE DIRECTORIES
+# ============================================================================
+
+log "Initializing directories..."
+
+mkdir -p "$DB_DIR" "$ROOT_DIR"
+
+# Best-effort ownership/permissions (ignore errors)
+if [ "$PUID" != "0" ] || [ "$PGID" != "0" ]; then
+  chown -R "${PUID}:${PGID}" "$DB_DIR" "$ROOT_DIR" 2>/dev/null || true
+  chmod -R u+rw "$DB_DIR" "$ROOT_DIR" 2>/dev/null || true
+fi
+
+# ============================================================================
+# 2) BOOTSTRAP DATABASE
+# ============================================================================
+
 if [ ! -f "$DB_FILE" ]; then
-  # DB missing: perform quick-setup to create DB + initial user
+  log "Database not found — bootstrapping..."
   start_quick_setup
 else
-  echo "Database $DB_FILE already exists — skipping quick-setup."
+  log "Database already exists at $DB_FILE"
 fi
 
-# At this point DB should exist (or we tried). Now ensure admin user exists and password is correct.
-# Use `filebrowser users find` / `users add` / `users update` against the DB.
-# The filebrowser binary will read DB by default from current dir; pass -d to ensure we target same DB.
-USER_PRESENT=0
-if filebrowser users ls -d "$DB_FILE" >/dev/null 2>&1; then
-  # list users, check first column for username match
-  if filebrowser users ls -d "$DB_FILE" | awk '{print $2}' | grep -x -- "$FILEBROWSER_ADMIN_USER" >/dev/null 2>&1; then
-    USER_PRESENT=1
-  fi
-fi
+# ============================================================================
+# 3) ENSURE ADMIN USER
+# ============================================================================
 
-if [ "$USER_PRESENT" -eq 1 ]; then
-  echo "User '$FILEBROWSER_ADMIN_USER' already exists in DB — updating password and admin perm."
-  # update password and ensure admin perm; CLI uses --password to set hashed password (it accepts plain text and hashes it)
-  filebrowser users update "$FILEBROWSER_ADMIN_USER" --password "$FILEBROWSER_ADMIN_PASSWORD" --perm.admin -d "$DB_FILE" || {
-    echo "Warning: user update failed; continuing."
-  }
+if [ -f "$DB_FILE" ]; then
+  ensure_admin_user
 else
-  echo "Creating user '$FILEBROWSER_ADMIN_USER' in DB..."
-  filebrowser users add "$FILEBROWSER_ADMIN_USER" "$FILEBROWSER_ADMIN_PASSWORD" --perm.admin -d "$DB_FILE" || {
-    echo "Warning: user add failed; continuing."
-  }
+  log "WARNING: Database file not found — skipping user management" >&2
 fi
 
-# Final: run filebrowser foreground with explicit DB and root, listening on all interfaces
-echo "Starting filebrowser (foreground) with DB=$DB_FILE and root=$ROOT_DIR on $ADDRESS:$PORT ..."
-exec filebrowser -r "$ROOT_DIR" -d "$DB_FILE" --address "$ADDRESS" -p "$PORT"
+# ============================================================================
+# 4) START FILEBROWSER
+# ============================================================================
+
+log "Starting filebrowser on $ADDRESS:$PORT with root=$ROOT_DIR"
+exec filebrowser -r "$ROOT_DIR" \
+                 -d "$DB_FILE" \
+                 --address "$ADDRESS" \
+                 -p "$PORT"

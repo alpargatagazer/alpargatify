@@ -5,12 +5,10 @@ services:
     image: local/beets:latest
     container_name: "beets-${PROJECT_NAME}"
     volumes:
-      # These variables are set in the wrapper
       - "${DEST_PATH}:/data:rw"
       - "${IMPORT_SRC}:/import:rw"
       - "${BEETS_CONFIG}:/config.yaml:ro"
     environment:
-      # Notice how paths mathch the mounted paths above
       - DRY_RUN=${DRY_RUN:-no}
       - IMPORT_MODE=${IMPORT_MODE:-full}
       - VERBOSE=${VERBOSE:-no}

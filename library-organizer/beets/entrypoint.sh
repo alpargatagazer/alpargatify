@@ -1,86 +1,163 @@
 #!/usr/bin/env bash
+#
+# Beets Docker Entrypoint
+# Executes beets import with configurable modes and retry logic
+#
+
 set -euo pipefail
 IFS=$'\n\t'
 
-# Config and source path (allow override from environment)
-CONFIG_PATH="/config.yaml"
-IMPORT_SRC_PATH="/import"
+# ============================================================================
+# Configuration
+# ============================================================================
 
-# Build base beet command
-BEET_BASE=(beet -c "$CONFIG_PATH")
+readonly CONFIG_PATH="/config.yaml"
+readonly IMPORT_SRC_PATH="/import"
+readonly TEMP_IMPORT_PATH="/tmp/beets_import_backup"
+readonly MAX_RETRIES=5
 
-# Map modes to beets cli flags:
-# - full:
-#     -> move files into library and autotag (default behavior)
-# - order-only:
-#     -> move files but do NOT autotag (-A) and DO NOT write tags (-W)
-# - tag-only:
-#     -> do not move (don't copy): -C ; allow autotag & write tags (default)
-#
-# Note: beets CLI flags referenced here come from beets docs/manpages:
-#   --pretend  : preview without changes
-#   --move     : move files into library (instead of copying)
-#   -A         : don't autotag (we use this to disable autotagging)
-#   -W         : don't write tags (we use this to avoid tag writes)
-#   -C         : don't copy (do not move/copy files)  -- use for tag-only
-#
-# If your beets install uses different flags, adjust these mappings here.
+# ============================================================================
+# Functions
+# ============================================================================
 
-# Compose the final beet import command based on mode and dry run
-if [ "$VERBOSE" = "yes" ]; then
-  # add verbose
-  BEET_BASE+=(-v)
-fi
-BEET_CMD=("${BEET_BASE[@]}" import)
-if [ "$DRY_RUN" = "yes" ]; then
-  # pretend mode: just preview
-  BEET_CMD+=(--pretend)
-fi
+# Logs a message to stderr with timestamp
+log() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >&2
+}
 
-case "$IMPORT_MODE" in
-  full)
-    # move + autotag (default)
-    true
-    ;;
-  order-only)
-    # move files into library, but don't autotag and don't write tags
-    BEET_CMD+=(-A -W)
-    ;;
-  tag-only)
-    # autotag/write tags but do NOT move/copy files (-C)
-    BEET_CMD+=(-C)
-    ;;
-  *)
-    echo "Unknown IMPORT_MODE: $IMPORT_MODE" >&2
-    exit 2
-    ;;
-esac
+# Logs an error message and exits
+error_exit() {
+  log "ERROR: $1"
+  exit "${2:-1}"
+}
 
-# Add import source path
-BEET_CMD+=("$IMPORT_SRC_PATH")
-
-echo "Running: $(printf "%s " "${BEET_CMD[@]}" | tr '\n' ' ')"
-
-# Simple retry wrapper (keeps your previous behavior)
-MAX_RETRIES=5
-attempt=0
-EXIT_CODE=1
-
-until [ $attempt -ge $MAX_RETRIES ]
-do
-  set +e
-  "${BEET_CMD[@]}"
-  EXIT_CODE=$?
-  set -e
-  if [ $EXIT_CODE -eq 0 ]; then
-    break
-  else
-    attempt=$((attempt+1))
-    echo "Whole-import attempt $attempt/$MAX_RETRIES failed — retrying after $((attempt*5))s..."
-    sleep $((attempt*5))
+# Restores files from temporary backup to original location
+restore_files() {
+  if [[ "$IMPORT_MODE" != "tag-only" ]] || [[ ! -d "$TEMP_IMPORT_PATH" ]]; then
+    return 0
   fi
-done
 
-echo "Beets finished with exit code $EXIT_CODE"
+  log "Restoring files from backup to original location..."
+  
+  if [[ -n "$(ls -A "$TEMP_IMPORT_PATH" 2>/dev/null)" ]]; then
+    cp -rf "$TEMP_IMPORT_PATH"/* "$IMPORT_SRC_PATH"/ || {
+      log "WARNING: Failed to restore some files"
+      return 1
+    }
+    rm -rf "$TEMP_IMPORT_PATH"
+    log "Files restored successfully"
+  else
+    log "No files to restore"
+  fi
+}
 
-exit "$EXIT_CODE"
+# Creates backup of files for tag-only mode
+backup_files() {
+  log "Tag-only mode: backing up files from $IMPORT_SRC_PATH..."
+  
+  mkdir -p "$TEMP_IMPORT_PATH"
+  
+  if [[ -n "$(ls -A "$IMPORT_SRC_PATH" 2>/dev/null)" ]]; then
+    mv "$IMPORT_SRC_PATH"/* "$TEMP_IMPORT_PATH"/ || \
+      error_exit "Failed to backup files" 3
+    
+    # Ensure files are restored even if script fails
+    trap restore_files EXIT
+    
+    log "Files moved to $TEMP_IMPORT_PATH"
+  else
+    log "No files found in $IMPORT_SRC_PATH to backup"
+  fi
+}
+
+# Builds the beets command array based on configuration
+build_beets_command() {
+  BEET_CMD=(beet -c "$CONFIG_PATH")
+  
+  # Add verbose flag if requested
+  [[ "${VERBOSE:-no}" == "yes" ]] && BEET_CMD+=(-v)
+  
+  BEET_CMD+=(import)
+  
+  # Add dry-run flag if requested
+  [[ "${DRY_RUN:-no}" == "yes" ]] && BEET_CMD+=(--pretend)
+  
+  # Configure mode-specific flags
+  case "${IMPORT_MODE:-full}" in
+    full)
+      # Default behavior: move files + autotag
+      BEET_CMD+=("$IMPORT_SRC_PATH")
+      ;;
+      
+    order-only)
+      # Move files without autotagging or writing tags
+      BEET_CMD+=(-A -W "$IMPORT_SRC_PATH")
+      ;;
+      
+    tag-only)
+      # Autotag/write tags without moving files
+      backup_files
+      BEET_CMD+=(-C --from-scratch "$TEMP_IMPORT_PATH")
+      ;;
+      
+    *)
+      error_exit "Unknown IMPORT_MODE: ${IMPORT_MODE:-unset}" 2
+      ;;
+  esac
+}
+
+# Executes beets command with retry logic
+execute_with_retry() {
+  local attempt=0
+  local exit_code=1
+  
+  # Display command with proper spacing (temporarily change IFS)
+  local OLD_IFS="$IFS"
+  IFS=' '
+  log "Running: ${BEET_CMD[*]}"
+  IFS="$OLD_IFS"
+  
+  while (( attempt < MAX_RETRIES )); do
+    set +e
+    "${BEET_CMD[@]}"
+    exit_code=$?
+    set -e
+    
+    if (( exit_code == 0 )); then
+      log "Beets completed successfully"
+      return 0
+    fi
+    
+    ((attempt++))
+    
+    if (( attempt < MAX_RETRIES )); then
+      local wait_time=$((attempt * 5))
+      log "Attempt $attempt/$MAX_RETRIES failed — retrying in ${wait_time}s..."
+      sleep "$wait_time"
+    fi
+  done
+  
+  log "Beets failed after $MAX_RETRIES attempts with exit code $exit_code"
+  return "$exit_code"
+}
+
+# ============================================================================
+# Main Execution
+# ============================================================================
+
+main() {
+  # Validate required paths exist
+  [[ -f "$CONFIG_PATH" ]] || error_exit "Config file not found: $CONFIG_PATH"
+  [[ -d "$IMPORT_SRC_PATH" ]] || error_exit "Import directory not found: $IMPORT_SRC_PATH"
+  
+  # Build command (BEET_CMD is now a global array)
+  build_beets_command
+  
+  # Execute with retry logic
+  execute_with_retry
+  local final_exit=$?
+  
+  exit "$final_exit"
+}
+
+main "$@"
