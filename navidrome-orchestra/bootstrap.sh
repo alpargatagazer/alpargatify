@@ -125,7 +125,7 @@ Profile control (defaults: all enabled):
   --no-extra-storage: disable the "extra-storage" profile
   --no-monitoring   : disable the "monitoring" profile
   --prod            : Caddy starts using HTTPS
-  --dinamic-ip      : Use DDClient for dinamic IPs resolution. Needs to be enabled with "--prod"
+  --dynamic-ip      : Use DDClient for dinamic IPs resolution. Needs to be enabled with "--prod"
 
 Examples:
   $(basename "$0")
@@ -139,7 +139,7 @@ while (( "$#" )); do
   case "$1" in
     --down) MODE="down"; shift ;;
     --prod) PROD_MODE=1; shift ;; 
-    --dinamic-ip) DINAMIC_IP=1; shift ;; 
+    --dynamic-ip) DINAMIC_IP=1; shift ;; 
     --no-wud) ENABLE_WUD=0; shift ;;
     --no-extra-storage) ENABLE_EXTRA_STORAGE=0; shift ;;
     --no-monitoring) ENABLE_MONITORING=0; shift ;;
@@ -239,14 +239,14 @@ info "Running in $( [[ $PROD_MODE -eq 1 ]] && echo "PROD" || echo "LOCAL" ) mode
 if [[ $DINAMIC_IP -eq 1 ]]; then
   if [[ $PROD_MODE -eq 1 ]]; then
     if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-      err "CLOUDFLARE_API_TOKEN must be set in .env when running with --dinamic-ip. Exiting."
+      err "CLOUDFLARE_API_TOKEN must be set in .env when running with --dynamic-ip. Exiting."
       exit 8
     fi
     # Do not print token; export for templating
     export CLOUDFLARE_API_TOKEN
     info "CLOUDFLARE_API_TOKEN is present (hidden)."
   else
-    err "--prod must be enable when using --dinamic-ip."
+    err "--prod must be enable when using --dynamic-ip."
     exit 4
   fi
 fi
@@ -618,7 +618,7 @@ if [[ $SUPPORTS_PROFILE -eq 1 ]]; then
     PROFILE_ARGS+=( --profile prod )
   fi
   if [[ $DINAMIC_IP -eq 1 ]]; then
-    PROFILE_ARGS+=( --profile dinamic-ip )
+    PROFILE_ARGS+=( --profile dynamic-ip )
   fi
 fi
 

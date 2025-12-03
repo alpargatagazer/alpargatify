@@ -1,54 +1,73 @@
-# Minimal beets configuration (used inside container). The wrapper mounts your host config on /config.yaml
-# Changed paths to produce:
+# ============================================================================
+# BEETS CONFIGURATION
+# ============================================================================
+# Minimal beets configuration for containerized environments
+# The wrapper mounts your host config on /config.yaml
+#
+# Directory Structure:
 #   /<AlbumArtist>/
 #       <Artist> - (<Year>) <Album Title> [<Release Type>]/
 #           (if multi-disc) Disc <N>/
 #               <N>-<track_padded>. <Artist> - <Title>.<ext>
 #           (if single-disc)
 #               <track_padded>. <Artist> - <Title>.<ext>
+# ============================================================================
 
+# ----------------------------------------------------------------------------
+# CORE SETTINGS
+# ----------------------------------------------------------------------------
 directory: /data
 library: /data/library.db
-
 threaded: yes
-
-import:
-  # These values can be overridden by the wrapper script via flags
-  move: yes                 # Move files from the import folder into the library directory
-  copy: no                  # Do not copy files; only move them
-  write: yes                # Write metadata (tags) to the files after importing
-  singletons: no            # Do not treat albums with a single track as standalone albums
-  resume: yes               # Resume interrupted imports where possible
-  incremental: no           # Do not import only new/unseen files; process everything
-  quiet: yes                # Run in non-interactive mode; do not prompt for choices
-  autotag: yes              # Automatically fetch and apply metadata from MusicBrainz or other sources
-  duplicate_action: remove  # If a duplicate is found, remove the old item before importing the new one
-
-match:
-  # Thresholds for matching candidate albums; values range from 0.0 (perfect) to 1.0 (completely different)
-  # Lower thresholds make beets more strict; higher thresholds accept more distant matches automatically
-  strong_rec_thresh: 0.30   # Distance below this is considered a strong match and will be automatically accepted
-  medium_rec_thresh: 0.50   # Distance below this is considered a medium match; may require confirmation in interactive mode (this is a problem since we execute it automatically)
-
-# Preserve original date instead of publishing information when writing tags
 original_date: yes
 
-# Use inline plugin to define the extra variables
+# ----------------------------------------------------------------------------
+# IMPORT SETTINGS
+# ----------------------------------------------------------------------------
+import:
+  move: yes                 # Move files from import folder into library
+  copy: no                  # Do not copy; only move
+  write: yes                # Write metadata tags to files after importing
+  singletons: no            # Do not treat single-track albums as standalone
+  resume: yes               # Resume interrupted imports
+  incremental: no           # Process everything, not just new files
+  quiet: yes                # Non-interactive mode; no prompts
+  autotag: yes              # Auto-fetch metadata from MusicBrainz
+  duplicate_action: remove  # Remove old item before importing duplicate
+
+# ----------------------------------------------------------------------------
+# MATCHING SETTINGS
+# ----------------------------------------------------------------------------
+# Thresholds for matching candidate albums (0.0 = perfect, 1.0 = different)
+# Lower thresholds = stricter matching; higher = more permissive
+match:
+  strong_rec_thresh: 0.30   # Auto-accept strong matches
+  medium_rec_thresh: 0.50   # Medium matches (may need confirmation)
+
+# ----------------------------------------------------------------------------
+# PLUGINS
+# ----------------------------------------------------------------------------
 plugins:
   - inline        # Define custom item fields
-  - albumtypes    # Detect album types and let you edit them
-  - musicbrainz   # Extract metadata from MusicBrainz
+  - albumtypes    # Detect and edit album types
+  - musicbrainz   # Extract MusicBrainz metadata
   - scrub         # Clean up original metadata
-  - fromfilename  # Help when there's no metadata at first
-  - lastgenre     # Guess genre from last.fm tags, needs installation
-  - fetchart      # Download cover for album, needs installation
-  - embedart      # Embed cover in songs, needs installation
-  - lyrics        # Fetch lyrics for songs, needs installation
+  - fromfilename  # Parse metadata from filenames as fallback
+  - lastgenre     # Guess genre from Last.fm tags
+  - fetchart      # Download album cover art
+  - embedart      # Embed cover art in audio files
+  - lyrics        # Fetch song lyrics
 
+# ----------------------------------------------------------------------------
+# CUSTOM FIELDS
+# ----------------------------------------------------------------------------
 item_fields:
   disc_folder: f"Disc {disc:02d}" if disctotal > 1 else ""
   disc_and_track: f"{disc:02d}.{track:02d}" if disctotal > 1 else f"{track:02d}"
 
+# ----------------------------------------------------------------------------
+# ALBUM TYPES
+# ----------------------------------------------------------------------------
 albumtypes:
   types:
     - ep: 'EP'
@@ -59,14 +78,22 @@ albumtypes:
     - remix: 'Remix'
   bracket: '[]'
 
+# ----------------------------------------------------------------------------
+# PATH FORMATS
+# ----------------------------------------------------------------------------
 paths:
-  # album directory: <AlbumArtist>/<AlbumArtist> - (<Year>) <Album Title> [<Release Type>]/
-  # if multidisc: create "Disc <disc>/" subfolder and prefix filenames with "<disc>-<track_padded>"
-  # if single-disc: place files directly and use "<track_padded>. <Artist> - <Title>"
+  # Albums: <AlbumArtist>/<AlbumArtist> - [<Year>]<Types> <Album>/<Disc?>/<Track>. <Artist> - <Title>
   default: $albumartist/$albumartist - [$year]$atypes $album/$disc_folder/$disc_and_track. $artist - $title
+  
+  # Singles: Non-Album/<Artist>/<Title>
   singleton: Non-Album/$artist/$title
+  
+  # Compilations: Compilations/<Album>/<Track>. <Artist> - <Title>
   comp: Compilations/$album%aunique{}/$track. $artist -$title
 
+# ----------------------------------------------------------------------------
+# PERMITTED FILE EXTENSIONS
+# ----------------------------------------------------------------------------
 permitted_extensions:
   - mp3
   - m4a
@@ -76,6 +103,9 @@ permitted_extensions:
   - wav
   - ogg
 
+# ----------------------------------------------------------------------------
+# MUSICBRAINZ SETTINGS
+# ----------------------------------------------------------------------------
 musicbrainz:
   extra_tags: [barcode, catalognum, country, label, media, year]
   external_ids:
@@ -86,34 +116,43 @@ musicbrainz:
     deezer: yes
     tidal: yes
 
+# ----------------------------------------------------------------------------
+# GENRE SETTINGS
+# ----------------------------------------------------------------------------
 lastgenre:
-  force: yes
-  keep_existing: no
-  count: 5
-  canonical: yes
-  prefer_specific: yes
+  force: yes                # Force genre tagging
+  keep_existing: no         # Replace existing genres
+  count: 3                  # Number of genres to fetch
+  canonical: yes            # Use canonical genre names
+  prefer_specific: yes      # Prefer specific over general genres
 
+# ----------------------------------------------------------------------------
+# ALBUM ART SETTINGS
+# ----------------------------------------------------------------------------
 art_filename: cover
 
 fetchart:
-  auto: yes                 # fetch art automatically during import
-  cautious: yes             # prefer trusted filenames (cover/front/etc.)
+  auto: yes                 # Fetch art automatically during import
+  cautious: yes             # Prefer trusted filenames
   cover_names: front cover album folder art
-  minwidth: 500             # ignore tiny images (px)
-  maxwidth: 1400            # downscale very large images to at most this width (px)
-  quality: 75               # JPEG compression quality when downscaling (1-100). 65-75 is a good range.
-  max_filesize: 1200000     # attempt to keep downloaded cover <= 800000 bytes (~800 KB)
-  enforce_ratio: 0.5%       # accept images that are approx square (allow small deviation)
+  minwidth: 500             # Minimum image width (px)
+  maxwidth: 1400            # Maximum image width (px)
+  quality: 75               # JPEG compression quality (1-100)
+  max_filesize: 1200000     # Max file size (~1.2 MB)
+  enforce_ratio: 0.5%       # Accept approximately square images
   sources:
-    - coverart: release     # coverart (Cover Art Archive) by release id first
+    - coverart: release     # Cover Art Archive by release ID
     - fanarttv
     - itunes
     - amazon
     - filesystem
-  store_source: no          # do not store art source tag (set yes if you want provenance)
-  high_resolution: no       # disable extremely high-res images (>20MB risk)
-  deinterlace: no           # keep progressive JPEGs by default
+  store_source: no          # Do not store art source tag
+  high_resolution: no       # Disable extremely high-res images
+  deinterlace: no           # Keep progressive JPEGs
 
+# ----------------------------------------------------------------------------
+# LYRICS SETTINGS
+# ----------------------------------------------------------------------------
 lyrics:
   sources: [genius, lrclib]
-  synced: yes
+  synced: yes               # Prefer synced/timestamped lyrics
