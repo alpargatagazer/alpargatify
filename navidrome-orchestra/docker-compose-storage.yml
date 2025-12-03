@@ -1,12 +1,12 @@
 services:
 
   sftp:
-    image: atmoz/sftp:alpine-3.7
+    image: atmoz/sftp:alpine
     container_name: sftp
-    labels:
-      - 'wud.tag.include=^alpine-\d+\.\d+$'
     command:
       - ${SFTP_USER}:${SFTP_PASSWORD}:${PUID}:${PGID}
+    environment:
+      TZ: ${TZ}
     volumes:
       - ${NAVIDROME_MUSIC_PATH}:/home/${SFTP_USER}/music:rw
     ports:
@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
 
   syncthing:
-    image: syncthing/syncthing:2.0.11
+    image: syncthing/syncthing:2.0.12
     user: ${PUID}:${PGID}
     profiles: ["extra-storage"]
     container_name: syncthing
@@ -24,10 +24,11 @@ services:
       - 'wud.tag.include=^\d+\.\d+\.\d+$'
     entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
     environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - GUI_USER=${SYNCTHING_GUI_USER}
-      - GUI_PASSWORD=${SYNCTHING_GUI_PASSWORD}
+      TZ: ${TZ}
+      PUID: ${PUID}
+      PGID: ${PGID}
+      GUI_USER: ${SYNCTHING_GUI_USER}
+      GUI_PASSWORD: ${SYNCTHING_GUI_PASSWORD}
     volumes:
       # Syncthing config directory (will contain config.xml, key, index, etc.)
       - ${VOLUMES_PATH}/syncthing:/var/syncthing:rw
@@ -60,10 +61,11 @@ services:
     # Use a custom entrypoint to initialise DB + admin user (mapped below)
     entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
     environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - FILEBROWSER_ADMIN_USER=${FILEBROWSER_ADMIN_USER}
-      - FILEBROWSER_ADMIN_PASSWORD=${FILEBROWSER_ADMIN_PASSWORD}
+      TZ: ${TZ}
+      PUID: ${PUID}
+      PGID: ${PGID}
+      FILEBROWSER_ADMIN_USER: ${FILEBROWSER_ADMIN_USER}
+      FILEBROWSER_ADMIN_PASSWORD: ${FILEBROWSER_ADMIN_PASSWORD}
     volumes:
       # persistent DB/config
       - ${VOLUMES_PATH}/filebrowser/srv:/srv:rw

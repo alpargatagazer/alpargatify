@@ -7,6 +7,7 @@ services:
     labels:
       - 'wud.tag.include=^\d+\.\d+\.\d+$'
     environment:
+      TZ: ${TZ}
       ND_CONFIGFILE: /navidrome.toml
       ND_LASTFM_APIKEY: ${LASTFM_APIKEY}
       ND_LASTFM_SECRET: ${LASTFM_SECRET}

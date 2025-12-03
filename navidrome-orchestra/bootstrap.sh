@@ -256,6 +256,7 @@ fi
 ###############################################################################
 echo
 echo "==== Navidrome bootstrap - summary ===="
+echo "Timezone:                   ${TZ}"
 echo "Mode:                       ${MODE}"
 echo "Navidrome music path:       ${NAVIDROME_MUSIC_PATH}"
 echo "Microservice volume paths:  ${VOLUMES_PATH:-<not set>}"

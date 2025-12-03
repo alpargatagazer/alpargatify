@@ -8,9 +8,10 @@ services:
     labels:
       - 'wud.tag.include=^\d+\.\d+$'
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-      - GF_USERS_ALLOW_SIGN_UP=false
+      TZ: ${TZ}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: false
     volumes:
       - ./configs/grafana-datasources.yml:/etc/grafana/provisioning/datasources/provisioner.yaml
       - ./configs/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/provisioner.yaml
@@ -27,12 +28,14 @@ services:
       retries: 3
 
   prometheus:
-    image: prom/prometheus:v3.7.3
+    image: prom/prometheus:v3.8.0
     user: ${PUID}:${PGID}
     profiles: ["monitoring"]
     container_name: prometheus
     labels:
       - 'wud.tag.include=^v\d+\.\d+\.\d+$'
+    environment:
+      TZ: ${TZ}
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -62,6 +65,8 @@ services:
     container_name: node-exporter
     labels:
       - 'wud.tag.include=^v\d+\.\d+\.\d+$'
+    environment:
+      TZ: ${TZ}
     command:
       - --web.telemetry-path=${CUSTOM_METRICS_PATH}
     networks:

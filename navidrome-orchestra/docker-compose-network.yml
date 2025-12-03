@@ -6,6 +6,8 @@ services:
     container_name: caddy
     labels:
       - 'wud.tag.include=^\d+\.\d+\.\d+$'
+    environment:
+      TZ: ${TZ}
     volumes:
       - ./configs/Caddyfile.custom:/etc/caddy/Caddyfile:ro
       - ${VOLUMES_PATH}/caddy/data:/data
@@ -27,13 +29,14 @@ services:
   ddclient:
     image: linuxserver/ddclient:4.0.0
     user: ${PUID}:${PGID}
-    profiles: ["dinamic-ip"]
+    profiles: ["dynamic-ip"]
     container_name: ddclient
     labels:
       - 'wud.tag.include=^\d+\.\d+\.\d+$'
     environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
+      TZ: ${TZ}
+      PUID: ${PUID}
+      PGID: ${PGID}
     volumes:
       - ./configs/ddclient.conf.custom:/config/ddclient.conf:ro
       # Optional runtime logs/cache (persisted)
