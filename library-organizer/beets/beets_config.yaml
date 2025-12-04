@@ -154,5 +154,5 @@ fetchart:
 # LYRICS SETTINGS
 # ----------------------------------------------------------------------------
 lyrics:
-  sources: [genius, lrclib]
+  sources: [lrclib,]        # You can set Genius as fallback but you get banned after many requests
   synced: yes               # Prefer synced/timestamped lyrics
