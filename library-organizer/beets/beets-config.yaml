@@ -126,7 +126,7 @@ lastgenre:
   whitelist: /genres-whitelist.txt  # Custom genre whitelist
   canonical: /genres-tree.yaml      # Use tree for genre
   prefer_specific: yes              # Prefer specific over general genres
-  min_weight: 0                     # Discard no genre
+  min_weight: 40                    # Discard no genre
 
 # ----------------------------------------------------------------------------
 # ALBUM ART SETTINGS

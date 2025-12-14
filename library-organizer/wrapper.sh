@@ -15,7 +15,7 @@
 #   --verbose              : add debug logging
 #
 # Usage:
-#   ./wrapper.sh [--dry-run] [--beets-config /abs/path/to/beets_config.yaml] \
+#   ./wrapper.sh [--dry-run] [--beets-config /abs/path/to/beets-config.yaml] \
 #                [--convert-only|--import-only|--order-only|--tag-only] \
 #                /path/to/source /absolute/path/to/music_library_root
 
@@ -100,7 +100,7 @@ debug(){ if [ "${VERBOSE:-no}" = "yes" ]; then printf '%s DEBUG: %s\n' "$(time_s
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default beets configuration file path
-BEETS_CONFIG="$SCRIPT_DIR/beets/beets_config.yaml"
+BEETS_CONFIG="$SCRIPT_DIR/beets/beets-config.yaml"
 
 # Dry-run mode: show actions without executing them
 DRY_RUN="no"
@@ -118,7 +118,7 @@ VERBOSE="no"
 # Display usage information and exit
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--dry-run] [--beets-config /path/to/beets_config.yaml] \
+Usage: $(basename "$0") [--dry-run] [--beets-config /path/to/beets-config.yaml] \
        [--convert-only | --import-only | --order-only | --tag-only] \
        /path/to/source /absolute/path/to/music_library_root
 

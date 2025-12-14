@@ -10,7 +10,7 @@ This small, focused pipeline converts lossless music files and imports them into
 ## What this folder includes
 - `flac-to-aac.sh`: converter script (default: `.flac` -> `.m4a` using **afconvert**).
 - `wrapper.sh`: orchestrator that runs the converter into a temporary directory and then invokes a one-shot **Docker Compose** service which runs **beets** to import the converted files.
-- `beets/`: container bits used by the importer (`beets_config.yaml`, `entrypoint.sh`, `Dockerfile`, `docker-compose.yml`).
+- `beets/`: container bits used by the importer (`beets-config.yaml`, `entrypoint.sh`, `Dockerfile`, `docker-compose.yml`).
 
 ## Technologies
 **Docker**, **Docker Compose** (or `docker compose`), **beets**, **afconvert** (macOS), optional **metaflac** and **AtomicParsley** for metadata handling.
@@ -31,7 +31,7 @@ If you are not on macOS and still want to use this pipeline, inspect `flac-to-aa
 Run from this `library-organizer` directory.
 
 Usage:
-`./wrapper.sh [--dry-run] [--beets-config /abs/path/to/beets_config.yaml] /path/to/source /absolute/path/to/music_library_root`
+`./wrapper.sh [--dry-run] [--beets-config /abs/path/to/beets-config.yaml] /path/to/source /absolute/path/to/music_library_root`
 
 Examples:
 - Convert and import interactively:
@@ -42,7 +42,7 @@ Examples:
 ## Detailed explanation: `wrapper.sh` (what it does and why it matters)
 - **Orchestration:** `wrapper.sh` runs `flac-to-aac.sh` to convert your source collection into a temporary directory, then runs a one-shot **Docker Compose** service that launches a **beets** container to import files from that temporary directory into the destination library.
 - **Atomic workflow:** conversion and import steps are separated to allow inspection (`--dry-run`) and to avoid touching your live library until import.
-- **Config override:** pass `--beets-config /abs/path/to/beets_config.yaml` to mount a custom **beets** configuration into the importer container.
+- **Config override:** pass `--beets-config /abs/path/to/beets-config.yaml` to mount a custom **beets** configuration into the importer container.
 
 ## `flac-to-aac.sh` (converter) behavior
 - Source -> destination: preserves the source directory tree under the destination root and converts each `.flac` to a same-relative-location `.m4a` file.
@@ -62,12 +62,12 @@ Environment variables used by the converter and wrapper (common ones):
 
 ## Beets import step
 - The wrapper mounts the temporary conversion directory into the beets container and runs the container entrypoint which calls **beets** to import the files into your library at the provided destination path.
-- The beets container uses the bundled `beets/beets_config.yaml` by default. Pass `--beets-config /abs/path/to/beets_config.yaml` to `wrapper.sh` to use a custom config file (the wrapper mounts it into the container).
+- The beets container uses the bundled `beets/beets-config.yaml` by default. Pass `--beets-config /abs/path/to/beets-config.yaml` to `wrapper.sh` to use a custom config file (the wrapper mounts it into the container).
 
 ## Where to look inside this folder
 - `wrapper.sh` — the main orchestrator. Read this first to understand the pipeline and to adapt compose detection or mount points.
 - `flac-to-aac.sh` — the conversion worker (edit `AF_OPTS` or replace `afconvert` if you need cross-platform support).
-- `beets/` — container config: `beets/beets_config.yaml`, `beets/entrypoint.sh`, `beets/Dockerfile`, `beets/docker-compose.yml` (used by the wrapper).
+- `beets/` — container config: `beets/beets-config.yaml`, `beets/entrypoint.sh`, `beets/Dockerfile`, `beets/docker-compose.yml` (used by the wrapper).
 
 ## License
 See `LICENSE` at the repository root.
