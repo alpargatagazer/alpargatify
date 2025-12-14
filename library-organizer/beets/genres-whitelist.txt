@@ -26,6 +26,7 @@ ambient americana
 ambient black metal
 ambient house
 ambient music
+american primitivism
 americana
 anarcho punk
 anti-folk
@@ -520,6 +521,7 @@ forró
 franco-country
 freak-folk
 freakbeat
+free folk
 free improvisation
 free jazz
 free music
@@ -654,6 +656,7 @@ heart attack
 heartland rock
 heavy beat
 heavy metal
+heavy psych
 hesher
 hi-nrg
 highlands
@@ -1351,6 +1354,7 @@ sica
 siguiriyas
 silat
 sinawi
+singer-songwriter
 situational
 ska
 ska punk
@@ -1400,6 +1404,7 @@ squee
 st. louis blues
 stand-up
 steelband
+stoner doom metal
 stoner metal
 stoner rock
 straight edge

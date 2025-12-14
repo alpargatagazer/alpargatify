@@ -195,6 +195,7 @@
 - country:
     - alt-country:
         - cowpunk
+    - american primitivism
     - americana
     - australian country music
     - bakersfield sound
@@ -484,11 +485,13 @@
     - dark folk
     - filk music
     - freak folk
+    - free folk
     - indie folk
     - industrial folk
     - neofolk
     - progressive folk
     - psychedelic folk
+    - singer-songwriter
     - sung poetry
     - techno-folk
 - hip hop:
@@ -655,6 +658,7 @@
     - speed metal
     - stoner rock:
         - stoner metal
+        - stoner doom metal
     - symphonic metal
     - thrash metal:
         - crossover thrash
@@ -814,6 +818,7 @@
     - psychedelic rock:
         - acid rock
         - freakbeat
+        - heavy psych
         - neo-psychedelia
         - raga rock
     - rock and roll
