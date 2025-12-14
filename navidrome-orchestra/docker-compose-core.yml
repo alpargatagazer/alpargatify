@@ -18,6 +18,7 @@ services:
       ND_BACKUP_PATH: /data/backup/
     volumes:
       - "${NAVIDROME_MUSIC_PATH}:/music:ro"
+      - "${NAVIDROME_EXTRA_LIBRARIES_PATH}:/extra-libraries:rw"
       - "${VOLUMES_PATH}/navidrome:/data"
       - "./configs/navidrome.toml:/navidrome.toml:ro"
       - "${BACKGROUNDS_PATH}:/backgrounds:ro"
