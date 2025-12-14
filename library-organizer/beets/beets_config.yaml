@@ -120,11 +120,13 @@ musicbrainz:
 # GENRE SETTINGS
 # ----------------------------------------------------------------------------
 lastgenre:
-  force: yes                # Force genre tagging
-  keep_existing: no         # Replace existing genres
-  count: 3                  # Number of genres to fetch
-  canonical: yes            # Use canonical genre names
-  prefer_specific: yes      # Prefer specific over general genres
+  force: yes                        # Force genre tagging
+  keep_existing: no                 # Replace existing genres
+  count: 5                          # Number of genres to fetch
+  whitelist: /genres-whitelist.txt  # Custom genre whitelist
+  canonical: /genres-tree.yaml      # Use tree for genre
+  prefer_specific: yes              # Prefer specific over general genres
+  min_weight: 1                     # Discard no genre
 
 # ----------------------------------------------------------------------------
 # ALBUM ART SETTINGS

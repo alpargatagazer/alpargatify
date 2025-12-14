@@ -8,6 +8,8 @@ services:
       - "${DEST_PATH}:/data:rw"
       - "${IMPORT_SRC}:/import:rw"
       - "${BEETS_CONFIG}:/config.yaml:ro"
+      - "./genres-tree.yaml:/genres-tree.yaml:ro"
+      - "./genres-whitelist.txt:/genres-whitelist.txt:ro"
     environment:
       - DRY_RUN=${DRY_RUN:-no}
       - IMPORT_MODE=${IMPORT_MODE:-full}
