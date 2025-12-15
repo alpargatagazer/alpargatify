@@ -287,6 +287,18 @@ if [[ ! -d "$NAVIDROME_MUSIC_PATH" ]]; then
 else
   info "Music directory exists: $NAVIDROME_MUSIC_PATH"
 fi
+if [[ -z "$NAVIDROME_EXTRA_LIBRARIES_PATH" ]]
+  NAVIDROME_EXTRA_LIBRARIES_PATH="/tmp/fake_nd_extra_libraries"
+  warn "Variable NAVIDROME_EXTRA_LIBRARIES_PATH is not set. Needed for multilibrary feature. Please add it if you plan to create different libraries for different users. Now set to $NAVIDROME_EXTRA_LIBRARIES_PATH"
+  export NAVIDROME_EXTRA_LIBRARIES_PATH
+else
+  if [[ ! -d "$NAVIDROME_EXTRA_LIBRARIES_PATH" ]]; then
+    warn "Extra music directory does not exist; creating: $NAVIDROME_EXTRA_LIBRARIES_PATH"
+    mkdir -p "$NAVIDROME_EXTRA_LIBRARIES_PATH"
+  else
+    info "Extra music directory exists: $NAVIDROME_EXTRA_LIBRARIES_PATH"
+  fi
+fi
 # Path where the volume of the services will be stored
 VOLUMES_PATH="${VOLUMES_PATH:-$SCRIPT_DIR/volumes}"
 if [[ ! -d "$VOLUMES_PATH" ]]; then
