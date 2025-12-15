@@ -55,7 +55,8 @@ services:
       '
     volumes:
       - ${VOLUMES_PATH}:/volumes:rw
-      - ${NAVIDROME_MUSIC_PATH}:/music:rw
+      - ${NAVIDROME_MUSIC_PATH}:/music/main:rw
+      - ${NAVIDROME_EXTRA_LIBRARIES_PATH}:/music/extra:rw
     networks:
       - internal
     # do not restart; it's a one-shot

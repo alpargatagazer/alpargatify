@@ -287,7 +287,7 @@ if [[ ! -d "$NAVIDROME_MUSIC_PATH" ]]; then
 else
   info "Music directory exists: $NAVIDROME_MUSIC_PATH"
 fi
-if [[ -z "$NAVIDROME_EXTRA_LIBRARIES_PATH" ]]
+if [[ -z "$NAVIDROME_EXTRA_LIBRARIES_PATH" ]]; then
   NAVIDROME_EXTRA_LIBRARIES_PATH="/tmp/fake_nd_extra_libraries"
   warn "Variable NAVIDROME_EXTRA_LIBRARIES_PATH is not set. Needed for multilibrary feature. Please add it if you plan to create different libraries for different users. Now set to $NAVIDROME_EXTRA_LIBRARIES_PATH"
   export NAVIDROME_EXTRA_LIBRARIES_PATH
