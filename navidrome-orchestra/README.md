@@ -10,6 +10,7 @@ This folder contains the Docker Compose files, configuration templates and helpe
 - **Network**: `docker-compose-network.yml` — runs **Caddy** (TLS/HTTP reverse proxy).
 - **Storage / Extras**: `docker-compose-storage.yml` & `docker-compose-extratools.yml` — run **SFTP**, **Syncthing**, **FileBrowser** and **WUD** (web UI for triggers/management).
 - **Bootstrap helper**: `bootstrap.sh` — prepares directories, renders config templates, validates environment and launches the composed services.
+- **Library creation helper**: `new-library.sh` — creates a new Navidrome library and FileBrowser user for isolated user access.
 
 ## Primary Technologies
 - **Docker**: container runtime for all services.
@@ -49,6 +50,21 @@ See the comments in `bootstrap.sh` for additional variable expectations and port
 - Creates an htpasswd-style hash (`WUD_ADMIN_PASSWORD_HASH`) from `WUD_ADMIN_PASSWORD` (using `openssl` or `htpasswd`) and exports it.
 - Renders templates into `configs/*.custom` (currently `prometheus.yml` -> `prometheus.yml.custom` and `Caddyfile` -> `Caddyfile.custom`) by substituting placeholders with environment values.
 - Detects the available `docker compose` or `docker-compose` binary and runs compose with all `docker-compose*.yml` files in the folder.
+
+## What `new-library.sh` does
+- Creates a new isolated library directory in `/extra-libraries/<username>` on the host (mapped from `NAVIDROME_EXTRA_LIBRARIES_PATH`).
+- Links the new library to an existing Navidrome user specified by username.
+- Creates or updates a FileBrowser user with the same username, granting access only to the new library directory.
+- Requires the Navidrome and FileBrowser containers to be running.
+- Temporarily stops FileBrowser during user creation to avoid database locks.
+- Validates inputs, checks for existing users/libraries, and provides a summary upon completion.
+
+Usage: `./new-library.sh <username> <password>`
+
+Requirements:
+- `.env` file with `NAVIDROME_EXTRA_LIBRARIES_PATH` set.
+- Navidrome user with the specified username must already exist.
+- FileBrowser admin credentials in `.env` if needed for initial setup.
 
 ## Flags and usage of `bootstrap.sh`
 Run the script from the `navidrome-orchestra` directory. Examples:
