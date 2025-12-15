@@ -16,6 +16,8 @@ services:
       ND_UILOGINBACKGROUNDURL: /backgrounds
       # Backups are saved under your Navidrome volume
       ND_BACKUP_PATH: /data/backup/
+      # This is needed during first boot
+      ND_PASSWORDENCRYPTIONKEY: ${NAVIDROME_PASSWORDENCRYPTIONKEY}
     volumes:
       - "${NAVIDROME_MUSIC_PATH}:/music:ro"
       - "${NAVIDROME_EXTRA_LIBRARIES_PATH}:/extra-libraries:ro"

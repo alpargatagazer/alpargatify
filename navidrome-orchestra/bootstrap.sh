@@ -270,6 +270,14 @@ echo "======================================"
 echo
 
 ###############################################################################
+# Ensure NAVIDROME_PASSWORDENCRYPTIONKEY exists during first boot
+###############################################################################
+if [[ ! -d "$VOLUMES_PATH/navidrome" ]] && [[ -z "${NAVIDROME_PASSWORDENCRYPTIONKEY}" ]]; then
+  error "Variable NAVIDROME_PASSWORDENCRYPTIONKEY is not set in .env. Necessary during first boot."
+  exit 3
+fi
+
+###############################################################################
 # Ensure config and music directories exist
 ###############################################################################
 # Path where music should be
