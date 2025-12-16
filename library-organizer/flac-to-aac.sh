@@ -15,16 +15,16 @@ IFS=$'\n\t'         # Set Internal Field Separator to newline and tab
 ###############################################################################
 # Global variables
 ###############################################################################
-RED=""              # ANSI color code for error messages
-ORANGE=""           # ANSI color code for warning messages
-RESET=""            # ANSI color code to reset formatting
+RED=""                # ANSI color code for error messages
+ORANGE=""             # ANSI color code for warning messages
+RESET=""              # ANSI color code to reset formatting
 MISSING_META_TOOLS="" # List of missing metadata tools
-XLD_PRESENT="no"    # Flag indicating if XLD is available
-SKIP_EXISTING="yes" # Skip conversion if output file exists
-VERBOSE="no"        # Enable verbose debug output
-DRY_RUN="no"        # Show actions without executing them
-# Default afconvert arguments: m4af container, AAC codec, 192kbps, quality 127
-DEFAULT_AF_ARGS=( -f m4af -d "aac" -b 192000 -q 127 )
+XLD_PRESENT="no"      # Flag indicating if XLD is available
+SKIP_EXISTING="yes"   # Skip conversion if output file exists
+VERBOSE="no"          # Enable verbose debug output
+DRY_RUN="no"          # Show actions without executing them
+# Default afconvert arguments: m4af container, AAC codec, 192kbps, quality 127 and VBR_constrained
+DEFAULT_AF_ARGS=( -f m4af -d "aac" -b 192000 -q 127 -s 2 )
 declare -a AF_ARGS  # Array to hold afconvert arguments
 
 ###############################################################################

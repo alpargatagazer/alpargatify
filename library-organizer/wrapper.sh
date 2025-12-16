@@ -386,12 +386,18 @@ info "-> invoking docker compose (beets import)"
 # Change to beets directory (where docker-compose.yml is located)
 pushd "$SCRIPT_DIR/beets" >/dev/null
 
-# Run compose with:
-#   --build: rebuild image if Dockerfile changed
-#   --abort-on-container-exit: stop all containers when the import finishes
+# Create unique project name to allow parallel executions
 export PROJECT_NAME=$(basename "$SRC" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/_\+/_/g' | sed 's/^_//;s/_$//')
-VERBOSE=${VERBOSE} compose -p "library-organizer" -f docker-compose.yml up --build --abort-on-container-exit
+
+# Run compose with unique project name
+VERBOSE=${VERBOSE} compose -p "$PROJECT_NAME" -f docker-compose.yml up --build --abort-on-container-exit
 EXIT_CODE=$?
+
+# Cleanup Docker resources (containers, networks, volumes)
+info "-> cleaning up docker resources"
+compose -p "$PROJECT_NAME" -f docker-compose.yml down --volumes --remove-orphans 2>/dev/null || {
+  warn "Docker cleanup encountered issues (this is usually safe to ignore)"
+}
 
 # Return to original directory
 popd >/dev/null

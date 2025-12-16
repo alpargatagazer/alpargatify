@@ -1398,6 +1398,7 @@ spectralism
 speed garage
 speed metal
 speedcore
+spiritual jazz
 spirituals
 spouge
 sprechgesang
