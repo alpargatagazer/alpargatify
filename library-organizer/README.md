@@ -10,6 +10,7 @@ This small, focused pipeline converts lossless music files and imports them into
 ## What this folder includes
 - `flac-to-aac.sh`: converter script (default: `.flac` -> `.m4a` using **afconvert**).
 - `wrapper.sh`: orchestrator that runs the converter into a temporary directory and then invokes a one-shot **Docker Compose** service which runs **beets** to import the converted files.
+- `parallel-wrapper.sh`: script to execute `wrapper.sh` in parallel for each immediate subdirectory of a given directory, allowing batch processing of multiple albums or collections.
 - `beets/`: container bits used by the importer (`beets-config.yaml`, `entrypoint.sh`, `Dockerfile`, `docker-compose.yml`).
 
 ## Technologies
@@ -30,7 +31,7 @@ If you are not on macOS and still want to use this pipeline, inspect `flac-to-aa
 ## Quick start (recommended)
 Run from this `library-organizer` directory.
 
-Usage:
+Usage for `wrapper.sh`:
 `./wrapper.sh [--dry-run] [--beets-config /abs/path/to/beets-config.yaml] /path/to/source /absolute/path/to/music_library_root`
 
 Examples:
@@ -39,10 +40,28 @@ Examples:
 - Dry-run: keep temporary converted output for inspection and skip the import cleanup:
 	`./wrapper.sh --dry-run /path/to/raw_flacs /absolute/path/to/music_library_root`
 
+Usage for `parallel-wrapper.sh`:
+`./parallel-wrapper.sh [OPTIONS] /path/to/parent/directory /absolute/path/to/music_library_root`
+
+Examples:
+- Process all subdirectories in parallel with default settings:
+	`./parallel-wrapper.sh /path/to/albums /absolute/path/to/music_library_root`
+- Limit to 2 parallel jobs:
+	`./parallel-wrapper.sh --max-jobs 2 /path/to/albums /absolute/path/to/music_library_root`
+- Dry run with verbose output:
+	`./parallel-wrapper.sh --dry-run --verbose /path/to/albums /absolute/path/to/music_library_root`
+
 ## Detailed explanation: `wrapper.sh` (what it does and why it matters)
 - **Orchestration:** `wrapper.sh` runs `flac-to-aac.sh` to convert your source collection into a temporary directory, then runs a one-shot **Docker Compose** service that launches a **beets** container to import files from that temporary directory into the destination library.
 - **Atomic workflow:** conversion and import steps are separated to allow inspection (`--dry-run`) and to avoid touching your live library until import.
 - **Config override:** pass `--beets-config /abs/path/to/beets-config.yaml` to mount a custom **beets** configuration into the importer container.
+
+## `parallel-wrapper.sh` (parallel execution)
+- **Purpose:** This script automates the processing of multiple music collections by running `wrapper.sh` in parallel for each immediate subdirectory within a specified parent directory. It's ideal for batch importing large numbers of albums or collections without manual intervention.
+- **Parallelism:** By default, it uses the number of CPU cores for maximum parallel jobs, but this can be customized with `--max-jobs N`.
+- **Options:** Supports all `wrapper.sh` options (e.g., `--dry-run`, `--beets-config PATH`, `--convert-only`, etc.) and passes them through. Additional options include `--max-jobs N` for limiting parallelism and `--verbose` for detailed logging.
+- **Logging:** Each job's output is logged to individual files in a temporary log directory for easy troubleshooting.
+- **Cleanup:** Automatically cleans up Docker resources after completion and provides a summary of completed and failed jobs.
 
 ## `flac-to-aac.sh` (converter) behavior
 - Source -> destination: preserves the source directory tree under the destination root and converts each `.flac` to a same-relative-location `.m4a` file.
@@ -66,6 +85,7 @@ Environment variables used by the converter and wrapper (common ones):
 
 ## Where to look inside this folder
 - `wrapper.sh` — the main orchestrator. Read this first to understand the pipeline and to adapt compose detection or mount points.
+- `parallel-wrapper.sh` — the parallel execution script. Use this for batch processing multiple directories.
 - `flac-to-aac.sh` — the conversion worker (edit `AF_OPTS` or replace `afconvert` if you need cross-platform support).
 - `beets/` — container config: `beets/beets-config.yaml`, `beets/entrypoint.sh`, `beets/Dockerfile`, `beets/docker-compose.yml` (used by the wrapper).
 
