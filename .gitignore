@@ -15,6 +15,7 @@
 **/cache/
 **volumes/
 backgrounds/
+telegram-bot/data/
 
 # Environment files
 *.env

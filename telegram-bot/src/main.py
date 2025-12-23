@@ -8,8 +8,8 @@ from navidrome_client import NavidromeClient
 from telegram_sender import TelegramSender
 
 # Configure Logging
-log_level_str = os.environ.get("LOGGING", "INFO").upper()
-log_level = getattr(logging, log_level_str, logging.INFO)
+log_level_str: str = os.environ.get("LOGGING", "INFO").upper()
+log_level: int = getattr(logging, log_level_str, logging.INFO)
 
 logging.basicConfig(
     level=log_level,
@@ -22,7 +22,10 @@ logging.basicConfig(
 logger = logging.getLogger("bot")
 logger.info(f"Logging configured at level: {log_level_str}")
 
-def job():
+def job() -> None:
+    """
+    Scheduled job that checks for new albums and anniversaries.
+    """
     logger.info(f"Starting daily check at {datetime.datetime.now()}")
     
     client = NavidromeClient()
@@ -59,7 +62,10 @@ def job():
 
     logger.info("Daily check completed.")
 
-def main():
+def main() -> None:
+    """
+    Main entrypoint for the application. Sets up the scheduler.
+    """
     logger.info("Navidrome Telegram Bot Starting...")
     
     # Optional: Run once on startup if ENV var set, for debugging
