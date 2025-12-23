@@ -1,0 +1,30 @@
+services:
+  telegram-bot:
+    build: .
+    container_name: navidrome_telegram_bot
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Madrid
+      - SCHEDULE_TIME=08:00
+      - LOGGING=INFO # Options: INFO, DEBUG
+      - RUN_ON_STARTUP=true # Set to false after testing
+    volumes:
+      - ./data:/app/data
+    secrets:
+      - navidrome_url
+      - navidrome_user
+      - navidrome_password
+      - telegram_bot_token
+      - telegram_chat_id
+
+secrets:
+  navidrome_url:
+    file: ./secrets/navidrome_url.txt
+  navidrome_user:
+    file: ./secrets/navidrome_user.txt
+  navidrome_password:
+    file: ./secrets/navidrome_password.txt
+  telegram_bot_token:
+    file: ./secrets/telegram_bot_token.txt
+  telegram_chat_id:
+    file: ./secrets/telegram_chat_id.txt
