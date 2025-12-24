@@ -7,7 +7,7 @@ services:
       - TZ=Europe/Madrid
       - SCHEDULE_TIME=08:00
       - LOGGING=INFO # Options: INFO, DEBUG
-      - RUN_ON_STARTUP=true # Set to true for testing
+      - RUN_ON_STARTUP=false # Set to true for testing
     volumes:
       - ./data:/app/data
     secrets:

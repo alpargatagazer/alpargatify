@@ -448,3 +448,27 @@ class NavidromeClient:
         
         url = f"{self.base_url}/rest/getCoverArt?{query_string}"
         return url
+
+    def get_cover_art_bytes(self, cover_id: str) -> Optional[bytes]:
+        """
+        Download album cover art as binary data.
+        
+        :param cover_id: Cover art ID from album metadata
+        :return: Cover art image bytes or None if download fails
+        """
+        if not self.base_url or not cover_id:
+            return None
+        
+        params = self._get_auth_params()
+        params['id'] = cover_id
+        
+        url = f"{self.base_url}/rest/getCoverArt"
+        
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            logger.debug(f"Downloaded cover art for {cover_id}, size: {len(response.content)} bytes")
+            return response.content
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to download cover art: {e}")
+            return None

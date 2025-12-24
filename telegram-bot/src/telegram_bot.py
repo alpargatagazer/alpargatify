@@ -122,26 +122,39 @@ class TelegramBot:
                 if album:
                     title = album.get('name', 'Unknown')
                     artist = album.get('artist', 'Unknown')
-                    album_id = album.get('id')
+                    year = album.get('year', '')
                     cover_id = album.get('coverArt')
                     
-                    # Generate Navidrome web link
-                    navidrome_url = get_secret("navidrome_url")
-                    web_link = f"{navidrome_url}/app/#/album/{album_id}" if navidrome_url and album_id else None
-                    
+                    # Build caption with year and genres
                     caption = f"🎲 *Why not listen to this?*\n\n💿 *{title}*\n👤 {artist}"
                     
-                    if web_link:
-                        caption += f"\n\n[Open in Navidrome]({web_link})"
+                    if year:
+                        caption += f"\n📅 {year}"
+                    
+                    # Add genres if available (check both 'genres' list and 'genre' string)
+                    genre_str = ""
+                    if "genres" in album and album["genres"]:
+                        g_list = album["genres"]
+                        if isinstance(g_list, list):
+                            names = [g.get("name") for g in g_list if isinstance(g, dict) and "name" in g]
+                            if names:
+                                genre_str = ", ".join(names)
+                    
+                    # Fallback to simple 'genre' if empty
+                    if not genre_str:
+                        genre_str = album.get('genre', '')
+                    
+                    if genre_str:
+                        caption += f"\n🏷 {genre_str}"
                     
                     # Try to send with cover art
                     if cover_id:
                         try:
-                            cover_url = self.navidrome.get_cover_art_url(cover_id)
-                            if cover_url:
+                            cover_bytes = self.navidrome.get_cover_art_bytes(cover_id)
+                            if cover_bytes:
                                 self.bot.send_photo(
                                     message.chat.id,
-                                    cover_url,
+                                    cover_bytes,
                                     caption=caption,
                                     parse_mode="Markdown"
                                 )
@@ -162,7 +175,15 @@ class TelegramBot:
         @self.authorized_only
         def search_music(message: Message):
             # Extract query from message: "/search radiohead" -> "radiohead"
+            # Remove command and bot mentions (e.g., @botname)
             query = message.text.replace("/search", "").strip()
+            
+            # Remove bot mention if present (e.g., @alpargatibot)
+            if query.startswith('@'):
+                parts = query.split(maxsplit=1)
+                query = parts[1] if len(parts) > 1 else ""
+            
+            query = query.strip()
             
             if not query:
                 self.bot.reply_to(
@@ -176,7 +197,7 @@ class TelegramBot:
             
             try:
                 self.bot.reply_to(message, f"🔎 Searching for '{query}'...")
-                results = self.navidrome.search_albums(query, limit=5)
+                results = self.navidrome.search_albums(query, limit=50)
                 
                 if not results:
                     self.bot.send_message(message.chat.id, f"❌ No albums found matching '{query}'.")
@@ -187,8 +208,28 @@ class TelegramBot:
                 for album in results:
                     name = album.get('name', 'Unknown')
                     artist = album.get('artist', 'Unknown')
-                    year = album.get('year', 'N/A')
-                    msg_lines.append(f"• {artist} - {name} ({year})")
+                    year = album.get('year', '')
+                    
+                    # Get genres (check both 'genres' list and 'genre' string)
+                    genre_str = ""
+                    if "genres" in album and album["genres"]:
+                        g_list = album["genres"]
+                        if isinstance(g_list, list):
+                            names = [g.get("name") for g in g_list if isinstance(g, dict) and "name" in g]
+                            if names:
+                                genre_str = ", ".join(names)
+                    
+                    # Fallback to simple 'genre' if empty
+                    if not genre_str:
+                        genre_str = album.get('genre', '')
+                    
+                    line = f"• {artist} - {name}"
+                    if year:
+                        line += f" 📅 {year}"
+                    if genre_str:
+                        line += f" 🏷 {genre_str}"
+                    
+                    msg_lines.append(line)
                 
                 self.bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="Markdown")
                 

@@ -1,19 +1,29 @@
-FROM python:3.12-slim
+# Multi-stage build for smaller final image
+FROM python:3.12-alpine AS builder
 
 WORKDIR /app
 
-# Upgrade pip
-RUN pip install --no-cache-dir --upgrade pip
+# Install build dependencies (needed for compiling Python packages)
+RUN apk add --no-cache gcc musl-dev linux-headers
 
-# Requirements
+# Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy source
+# Final stage - smaller runtime image
+FROM python:3.12-alpine
+
+WORKDIR /app
+
+# Install only runtime dependencies (tzdata for timezone support)
+RUN apk add --no-cache tzdata
+
+# Copy Python packages from builder
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+
+# Copy source code
 COPY src/ .
 COPY tests/ ./tests/
-
-# Timezone data is needed for correct local time scheduling
-RUN apt-get update && apt-get install -y tzdata && rm -rf /var/lib/apt/lists/*
 
 CMD ["python", "main.py"]
