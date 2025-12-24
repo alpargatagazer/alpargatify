@@ -35,7 +35,7 @@ Create a `secrets/` directory in the project root with these files (plain text, 
 | `navidrome_user.txt` | Your Navidrome username | `admin` |
 | `navidrome_password.txt` | Your Navidrome password | `mypassword` |
 | `telegram_bot_token.txt` | Token from [@BotFather](https://t.me/botfather) | `123456789:ABCdef...` |
-| `telegram_chat_id.txt` | **Group chat ID** for notifications and authorization | `-1001234567890` |
+| `telegram_chat_id.txt` | **Group chat ID(s)** for notifications and authorization | `-1001234567890` or `-1001111111,-1002222222` |
 
 **How to get your Group Chat ID:**
 1. Add your bot to your Telegram group
@@ -44,7 +44,9 @@ Create a `secrets/` directory in the project root with these files (plain text, 
 4. Look for `"chat":{"id":-1001234567890` in the response
 5. Copy the negative number (including the minus sign) to `telegram_chat_id.txt`
 
-**Security Note**: The bot will **only respond to commands from this specific group**. Anyone outside the group cannot interact with the bot, even if they have the bot's username.
+**Multiple Groups (for testing):** You can authorize multiple groups by separating chat IDs with commas. Scheduled notifications will be sent to **all** authorized groups.
+
+**Security Note**: The bot will **only respond to commands from authorized groups**. Anyone outside these groups cannot interact with the bot.
 
 ### 2. Environment Variables
 Configure in `docker-compose.yml`:

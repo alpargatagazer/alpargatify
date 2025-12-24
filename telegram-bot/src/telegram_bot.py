@@ -18,7 +18,7 @@ class TelegramBot:
     """
     def __init__(self):
         """
-        Initialize the bot with token and authorized chat ID.
+        Initialize the bot with token and authorized chat ID(s).
         """
         token = get_secret("telegram_bot_token")
         if not token:
@@ -27,13 +27,16 @@ class TelegramBot:
         self.bot = telebot.TeleBot(token)
         self.navidrome = NavidromeClient()
         
-        # Load authorized chat ID (used for both notifications and command authorization)
-        self.authorized_chat_id: Optional[str] = get_secret("telegram_chat_id")
+        # Load authorized chat ID(s) - can be single ID or comma-separated list
+        chat_ids_str = get_secret("telegram_chat_id", "")
+        self.authorized_chat_ids: List[str] = []
         
-        if not self.authorized_chat_id:
-            logger.warning("No authorized chat ID configured. Bot will reject all requests.")
+        if chat_ids_str:
+            # Split by comma and clean whitespace
+            self.authorized_chat_ids = [cid.strip() for cid in chat_ids_str.split(",") if cid.strip()]
+            logger.info(f"Bot authorized for {len(self.authorized_chat_ids)} chat(s): {', '.join(self.authorized_chat_ids)}")
         else:
-            logger.info(f"Bot authorized for chat ID: {self.authorized_chat_id}")
+            logger.warning("No authorized chat IDs configured. Bot will reject all requests.")
         
         # Register command handlers
         self._register_handlers()
@@ -41,16 +44,17 @@ class TelegramBot:
     
     def _is_authorized(self, chat_id: int) -> bool:
         """
-        Check if a command comes from the authorized chat.
+        Check if a command comes from an authorized chat.
         
         :param chat_id: Telegram chat ID where the command was sent
         :return: True if authorized, False otherwise
         """
-        if not self.authorized_chat_id:
+        if not self.authorized_chat_ids:
             return False
         
         # Convert chat_id to string for comparison (can be negative for groups)
-        if str(chat_id) == self.authorized_chat_id:
+        chat_id_str = str(chat_id)
+        if chat_id_str in self.authorized_chat_ids:
             return True
         else:
             logger.warning(f"Unauthorized access attempt from chat ID: {chat_id}")
@@ -246,31 +250,33 @@ class TelegramBot:
 
     def send_notification(self, text: str, parse_mode: str = "HTML") -> None:
         """
-        Send a notification message to the authorized chat.
+        Send a notification message to all authorized chats.
         Automatically splits messages that exceed Telegram's 4096 character limit.
         Used for scheduled notifications (new albums, anniversaries).
         
         :param text: The message content.
         :param parse_mode: HTML or Markdown.
         """
-        if not self.authorized_chat_id:
-            logger.error("Authorized chat ID not configured.")
+        if not self.authorized_chat_ids:
+            logger.error("No authorized chat IDs configured.")
             return
 
         # Telegram's message limit is 4096 characters
         max_length = 4096
         messages = self._split_message(text, max_length)
         
-        for msg in messages:
-            try:
-                self.bot.send_message(
-                    chat_id=self.authorized_chat_id,
-                    text=msg,
-                    parse_mode=parse_mode
-                )
-                logger.debug("Notification sent successfully.")
-            except Exception as e:
-                logger.error(f"Failed to send notification: {e}")
+        # Send to all authorized chats
+        for chat_id in self.authorized_chat_ids:
+            for msg in messages:
+                try:
+                    self.bot.send_message(
+                        chat_id=chat_id,
+                        text=msg,
+                        parse_mode=parse_mode
+                    )
+                    logger.debug(f"Notification sent to chat {chat_id}")
+                except Exception as e:
+                    logger.error(f"Failed to send notification to chat {chat_id}: {e}")
 
     @staticmethod
     def _split_message(text: str, max_length: int) -> List[str]:
