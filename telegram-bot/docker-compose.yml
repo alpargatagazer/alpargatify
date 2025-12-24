@@ -7,7 +7,7 @@ services:
       - TZ=Europe/Madrid
       - SCHEDULE_TIME=08:00
       - LOGGING=INFO # Options: INFO, DEBUG
-      - RUN_ON_STARTUP=false # Set to true for testing
+      - RUN_ON_STARTUP=true # Set to true for testing
     volumes:
       - ./data:/app/data
     secrets:
@@ -16,6 +16,7 @@ services:
       - navidrome_password
       - telegram_bot_token
       - telegram_chat_id
+      - telegram_user_ids
 
 secrets:
   navidrome_url:
@@ -28,3 +29,5 @@ secrets:
     file: ./secrets/telegram_bot_token.txt
   telegram_chat_id:
     file: ./secrets/telegram_chat_id.txt
+  telegram_user_ids:
+    file: ./secrets/telegram_user_ids.txt

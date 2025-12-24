@@ -351,3 +351,100 @@ class NavidromeClient:
                      logger.debug(f"Date check error for {album.get('name')}: {e}")
             
         return matches
+
+    def search_albums(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search for albums matching the given query.
+        
+        :param query: Search term (artist or album name)
+        :param limit: Maximum number of results to return
+        :return: List of matching albums
+        """
+        response = self._request('search3', {
+            'query': query,
+            'albumCount': limit,
+            'artistCount': 0,
+            'songCount': 0
+        })
+        
+        if response and 'searchResult3' in response:
+            albums = response['searchResult3'].get('album', [])
+            logger.info(f"Search for '{query}' returned {len(albums)} albums")
+            return albums
+        
+        return []
+
+    def get_random_album(self) -> Optional[Dict[str, Any]]:
+        """
+        Get a random album from the library.
+        
+        :return: Random album dictionary or None if not found
+        """
+        response = self._request('getAlbumList2', {
+            'type': 'random',
+            'size': 1
+        })
+        
+        if response and 'albumList2' in response:
+            albums = response['albumList2'].get('album', [])
+            if albums:
+                logger.info(f"Random album: {albums[0].get('name')}")
+                return albums[0]
+        
+        return None
+
+    def get_server_stats(self) -> Optional[Dict[str, int]]:
+        """
+        Get server statistics (album count, artist count, song count).
+        Uses the local cache to count items efficiently.
+        
+        :return: Dictionary with 'albums', 'artists', 'songs' counts or None on error
+        """
+        try:
+            # Use cached library for counting
+            all_albums = self.sync_library(force=False)
+            
+            # Count unique artists
+            artists = set()
+            total_songs = 0
+            
+            for album in all_albums:
+                artist = album.get('artist')
+                if artist:
+                    artists.add(artist)
+                
+                song_count = album.get('songCount', 0)
+                total_songs += song_count
+            
+            stats = {
+                'albums': len(all_albums),
+                'artists': len(artists),
+                'songs': total_songs
+            }
+            
+            logger.info(f"Server stats: {stats}")
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Error getting server stats: {e}")
+            return None
+
+    def get_cover_art_url(self, cover_id: str) -> Optional[str]:
+        """
+        Generate an authenticated URL for album cover art.
+        
+        :param cover_id: Cover art ID from album metadata
+        :return: Full URL to cover art image or None if configuration missing
+        """
+        if not self.base_url or not cover_id:
+            return None
+        
+        params = self._get_auth_params()
+        params['id'] = cover_id
+        
+        # Build query string
+        query_parts = [f"{k}={v}" for k, v in params.items()]
+        query_string = "&".join(query_parts)
+        
+        url = f"{self.base_url}/rest/getCoverArt?{query_string}"
+        return url
