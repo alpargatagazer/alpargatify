@@ -17,6 +17,9 @@ readonly IMPORT_SRC_PATH="/import"
 readonly TEMP_IMPORT_PATH="/tmp/beets_import_backup"
 readonly MAX_RETRIES=10
 
+# Tracks if any albums were skipped during import
+ALBUM_SKIPPED=0
+
 # ============================================================================
 # Functions
 # ============================================================================
@@ -170,8 +173,22 @@ execute_with_retry() {
     
     attempt=$((attempt+1))
     set +e
-    "${BEET_CMD[@]}"
-    exit_code=$?
+    
+    # Capture output to check for skippings while still showing it
+    local temp_output
+    temp_output=$(mktemp)
+    
+    # Run command, tee output to temp file and stdout
+    "${BEET_CMD[@]}" 2>&1 | tee "$temp_output"
+    exit_code=${PIPESTATUS[0]}
+    
+    # Check for "Skipping." in the output
+    if grep -q "Skipping." "$temp_output"; then
+      log "Detected skippings in beet output"
+      ALBUM_SKIPPED=1
+    fi
+    rm -f "$temp_output"
+    
     set -e
     
     if (( exit_code == 0 )); then
@@ -306,8 +323,10 @@ main() {
   mkdir -p "$TEMP_IMPORT_PATH"
   
   # Get all album folders (with multi-disc detection)
-  local folders
-  mapfile -t folders < <(get_album_folders)
+  local folders=()
+  while IFS= read -r line; do
+    folders+=("$line")
+  done < <(get_album_folders)
   
   if (( ${#folders[@]} == 0 )); then
     log "No folders found to process in $IMPORT_SRC_PATH"
@@ -319,10 +338,16 @@ main() {
   # Process each folder
   local failed_folders=()
   local successful_folders=()
+  local skipped_folders=()
   
   for folder in "${folders[@]}"; do
+    ALBUM_SKIPPED=0
     if process_folder "$folder"; then
-      successful_folders+=("$(basename "$folder")")
+      if (( ALBUM_SKIPPED == 1 )); then
+        skipped_folders+=("$(basename "$folder")")
+      else
+        successful_folders+=("$(basename "$folder")")
+      fi
     else
       failed_folders+=("$(basename "$folder")")
     fi
@@ -335,6 +360,7 @@ main() {
   log "Total albums: ${#folders[@]}"
   log "Successful: ${#successful_folders[@]}"
   log "Failed: ${#failed_folders[@]}"
+  log "Skipped: ${#skipped_folders[@]}"
   
   if (( ${#failed_folders[@]} > 0 )); then
     log ""
@@ -343,6 +369,15 @@ main() {
       log "  - $folder"
     done
     exit 1
+  fi
+  
+  if (( ${#skipped_folders[@]} > 0 )); then
+    log ""
+    log "Skipped albums:"
+    for folder in "${skipped_folders[@]}"; do
+      log "  - $folder"
+    done
+    exit 2
   fi
   
   log ""

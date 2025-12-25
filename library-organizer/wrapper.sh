@@ -403,7 +403,9 @@ compose -p "$PROJECT_NAME" -f docker-compose.yml down --volumes --remove-orphans
 popd >/dev/null
 
 # Check if beets import succeeded
-if [ "$EXIT_CODE" -ne 0 ]; then
+if [ "$EXIT_CODE" -eq 2 ]; then
+  warn "Beets import completed with some skippings."
+elif [ "$EXIT_CODE" -ne 0 ]; then
   err "Beets (docker compose) finished with non-zero exit code: $EXIT_CODE"
   exit $EXIT_CODE
 fi
