@@ -72,7 +72,21 @@ The bot will:
 2. Cache your library in `data/albums_cache.json` for fast subsequent runs
 3. Listen for commands from authorized users only
 
-### 4. Verify It's Running
+### 4. BotFather Configuration (Recommended)
+To improve user experience, you can register the commands with [@BotFather](https://t.me/botfather) so they appear in the auto-complete menu.
+1. Message `@BotFather` and send `/setcommands`
+2. Select your bot
+3. Paste the following list:
+```text
+help - Show bot help
+stats - Navidrome stats
+random - Send a random album from Navidrome
+search - Search albums by artist or name
+nowplaying - What are users listening to right now?
+genres - Pick a genre and I'll show albums within it
+```
+
+### 5. Verify It's Running
 ```bash
 # Check logs
 docker logs -f navidrome_telegram_bot
@@ -82,12 +96,6 @@ docker logs -f navidrome_telegram_bot
 # Scheduler thread started
 # Bot polling thread started
 ```
-
-### 5. Test Interactive Commands
-Send a message to your bot on Telegram:
-- `/help` - See all available commands
-- `/stats` - View your library stats
-- `/random` - Get a random album
 
 ## 🏗️ Architecture
 
@@ -109,26 +117,36 @@ Both share the same bot instance for efficiency.
 - Separates build dependencies (gcc, musl-dev) from runtime
 - Only includes essential packages in final image
 
-## 🛠️ Development
+## 🛠️ Development & Testing
 
 ### Project Structure
 ```
 telegram-bot/
 ├── src/
-│   ├── main.py              # Entry point, threading orchestration
-│   ├── telegram_bot.py      # Unified bot (commands + notifications)
-│   ├── navidrome_client.py  # Subsonic API client
-│   └── secrets_loader.py    # Docker secrets helper
+│   ├── main.py                     # Entry point, threading orchestration
+│   ├── telegram_bot.py             # Unified bot (commands + notifications)
+│   ├── navidrome_client.py         # Subsonic API client
+│   └── secrets_loader.py           # Docker secrets helper
 ├── tests/
-│   └── test_navidrome.py    # Integration tests
-├── secrets/                 # Sensitive configuration
-└── data/                    # Persistent cache (volume)
+│   ├── test_navidrome_client_unit.py # Unit tests (Mocks)
+│   ├── test_navidrome_client_integration.py # Integration tests (Real API)
+│   └── test_navidrome.py           # Legacy connection test
+├── run_tests.py                    # Master test runner
+├── secrets/                        # Sensitive configuration
+└── data/                           # Persistent cache (volume)
 ```
 
-### Running Tests
+### Running Automated Tests
+The testing suite is designed to run inside the Docker environment without interfering with the main bot process.
 ```bash
-docker-compose run --rm telegram-bot python tests/test_navidrome.py
-docker-compose run --rm telegram-bot python tests/test_features.py
+# Run all tests (Unit + Integration)
+docker-compose run --rm telegram-bot python run_tests.py
+
+# Run only unit tests (safe to run without API access)
+docker-compose run --rm telegram-bot python tests/test_navidrome_client_unit.py
+
+# Run only integration tests (requires valid secrets)
+docker-compose run --rm telegram-bot python tests/test_navidrome_client_integration.py
 ```
 
 ### Updating the Bot

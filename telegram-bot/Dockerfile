@@ -22,8 +22,9 @@ RUN apk add --no-cache tzdata
 # Copy Python packages from builder
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 
-# Copy source code
+# Copy source code and scripts
 COPY src/ .
 COPY tests/ ./tests/
+COPY run_tests.py .
 
 CMD ["python", "main.py"]
