@@ -8,6 +8,8 @@ import string
 from typing import List, Dict, Optional, Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from secrets_loader import get_secret
 
@@ -31,6 +33,19 @@ class NavidromeClient:
         self._music_folder_name: str = os.environ.get("NAVIDROME_MUSIC_FOLDER", "Music Library")
         self._music_folder_id: Optional[str] = None
         self._scan_meta_file: str = '/app/data/scan_status.json'
+        
+        # Setup session with retries
+        self.session = requests.Session()
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        self.timeout = 30 # Default timeout in seconds
 
     def _get_auth_params(self) -> dict[str, str | None]:
         """
@@ -77,7 +92,7 @@ class NavidromeClient:
         logger.debug(f"Requesting {url} with params: {params}")
         
         try:
-            response = requests.get(url, params=full_params)
+            response = self.session.get(url, params=full_params, timeout=self.timeout)
             response.raise_for_status()
             
             logger.debug(f"Response status: {response.status_code}")
@@ -99,7 +114,7 @@ class NavidromeClient:
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Error connecting to Navidrome: {e}")
-            return None
+            raise e
 
     def get_music_folder_id(self) -> Optional[str]:
         """
