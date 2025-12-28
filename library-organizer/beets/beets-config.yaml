@@ -79,6 +79,12 @@ item_fields:
             parts = latin.split(", ")
             if len(parts) == 2:
                 latin = f"{parts[1]} {parts[0]}"
+        
+        # Check if the latin/transliterated name is already present in the artist name
+        # to avoid folders like "Artist [Artist]"
+        if latin.lower() in albumartist.lower():
+            return albumartist
+            
         return f"{albumartist} [{latin}]"
 
 # ----------------------------------------------------------------------------
@@ -106,6 +112,14 @@ paths:
 
   # Compilations: Compilations/<Album>/<Track>. <Artist> - <Title>
   comp: Compilations/$album%aunique{}%if{$albumdisambig, [$albumdisambig]}/$track. $artist -$title
+
+# ----------------------------------------------------------------------------
+# AUNIQUE SETTINGS (Identity & Disambiguation)
+# ----------------------------------------------------------------------------
+aunique:
+  keys: albumartist album year albumdisambig
+  disambiguators: albumtype label catalognum
+  bracket: '[]'
 
 # ----------------------------------------------------------------------------
 # PERMITTED FILE EXTENSIONS
