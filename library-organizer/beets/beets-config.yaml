@@ -65,6 +65,22 @@ item_fields:
   disc_folder: f"Disc {disc:02d}" if disctotal > 1 else ""
   disc_and_track: f"{disc:02d}.{track:02d}" if disctotal > 1 else f"{track:02d}"
 
+  formatted_albumartist: |
+    import sys
+    # If the name is ascii we keep it like that
+    if albumartist.isascii():
+        return albumartist
+    else:
+        # If it has non-ascii characters we use the 'albumartist_sort' that usually is latin
+        # Example: It will return "Fishmans [フィッシュマンズ]"
+        latin = albumartist_sort
+        # Small cleaning if the sort name is "Haino, Keiji" -> "Keiji Haino" (optional, but recommended)
+        if "," in latin:
+            parts = latin.split(", ")
+            if len(parts) == 2:
+                latin = f"{parts[1]} {parts[0]}"
+        return f"{albumartist} [{latin}]"
+
 # ----------------------------------------------------------------------------
 # ALBUM TYPES
 # ----------------------------------------------------------------------------
@@ -82,14 +98,14 @@ albumtypes:
 # PATH FORMATS
 # ----------------------------------------------------------------------------
 paths:
-  # Albums: <AlbumArtist>/<AlbumArtist> - [<Year>]<Types> <Album>/<Disc?>/<Track>. <Artist> - <Title>
-  default: $albumartist/$albumartist - [$year]$atypes $album/$disc_folder/$disc_and_track. $artist - $title
-  
-  # Singles: Non-Album/<Artist>/<Title>
+  # Albums: <AlbumArtist>/<AlbumArtist> - [$year]$atypes $album %aunique{} [$albumdisambig]/$disc_folder/$disc_and_track. $artist - $title
+  default: $formatted_albumartist/$formatted_albumartist - [$year]$atypes $album%aunique{}%if{$albumdisambig, [$albumdisambig]}/$disc_folder/$disc_and_track. $artist - $title
+
+  # Singles: Non-Album/$artist/$title
   singleton: Non-Album/$artist/$title
-  
+
   # Compilations: Compilations/<Album>/<Track>. <Artist> - <Title>
-  comp: Compilations/$album%aunique{}/$track. $artist -$title
+  comp: Compilations/$album%aunique{}%if{$albumdisambig, [$albumdisambig]}/$track. $artist -$title
 
 # ----------------------------------------------------------------------------
 # PERMITTED FILE EXTENSIONS
@@ -100,8 +116,6 @@ permitted_extensions:
   - aac
   - mp4
   - flac
-  - wav
-  - ogg
 
 # ----------------------------------------------------------------------------
 # MUSICBRAINZ SETTINGS
