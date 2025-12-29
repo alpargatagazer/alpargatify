@@ -154,8 +154,11 @@ class TelegramBot:
                     year = album.get('year', '')
                     cover_id = album.get('coverArt')
                     
+                    # Extract album type tag (EP, Single, Live, etc.)
+                    type_tag = self._get_album_type_tag(album)
+                    
                     # Build caption with year and genres
-                    caption = f"🎲 *Why not listen to this?*\n\n💿 *{title}*\n👤 {artist}"
+                    caption = f"🎲 *Why not listen to this?*\n\n💿 *{title}*{type_tag}\n👤 {artist}"
                     
                     if year:
                         caption += f"\n📅 {year}"
@@ -237,17 +240,30 @@ class TelegramBot:
                     self.send_message(message.chat.id, f"❌ No albums found matching '{query}'.")
                     return
                 
-                msg_lines = [f"🔎 *Results for '{query}':*\n"]
+                msg_lines = [f"🔎 <b>Results for '{query}':</b>\n"]
+                
+                # Fetch full library once for enrichment lookups
+                all_albums = self.navidrome.sync_library(force=False)
                 
                 for album in results:
                     name = album.get('name', 'Unknown')
                     artist = album.get('artist', 'Unknown')
                     year = album.get('year', '')
+                    album_id = album.get('id')
+                    
+                    # Try to get enriched metadata (releasedTypes, isCompilation) from cache
+                    enriched_album = album
+                    if album_id:
+                        cached = next((a for a in all_albums if a.get('id') == album_id), None)
+                        if cached:
+                            enriched_album = cached
+                            
+                    type_tag = self._get_album_type_tag(enriched_album)
                     
                     # Get genres (check both 'genres' list and 'genre' string)
                     genre_str = ""
-                    if "genres" in album and album["genres"]:
-                        g_list = album["genres"]
+                    if "genres" in enriched_album and enriched_album["genres"]:
+                        g_list = enriched_album["genres"]
                         if isinstance(g_list, list):
                             names = [g.get("name") for g in g_list if isinstance(g, dict) and "name" in g]
                             if names:
@@ -255,9 +271,9 @@ class TelegramBot:
                     
                     # Fallback to simple 'genre' if empty
                     if not genre_str:
-                        genre_str = album.get('genre', '')
+                        genre_str = enriched_album.get('genre', '')
                     
-                    line = f"• {artist} - {name}"
+                    line = f"• {artist} - <b>{name}</b>{type_tag}"
                     if year:
                         line += f" 📅 {year}"
                     if genre_str:
@@ -265,7 +281,7 @@ class TelegramBot:
                     
                     msg_lines.append(line)
                 
-                self.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="Markdown")
+                self.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
                 
             except Exception as e:
                 logger.error(f"Error searching: {e}", exc_info=True)
@@ -289,9 +305,21 @@ class TelegramBot:
                 user = entry.get('username', 'Someone')
                 title = entry.get('title', 'Unknown')
                 artist = entry.get('artist', 'Unknown')
-                album = entry.get('album', 'Unknown')
+                album_name = entry.get('album', 'Unknown')
                 year = entry.get('year', 'Unknown')
-                msg += f"👤 <b>{user}</b> is listening to:\n🎵 {title} - {artist} ({album}, {year})\n\n"
+                album_id = entry.get('albumId')
+                
+                # Try to get album type from cache for more context
+                type_tag = ""
+                if album_id:
+                    # sync_library(force=False) returns the list of enriched albums
+                    all_albums = self.navidrome.sync_library(force=False)
+                    # Find this specific album to get its release type
+                    album_obj = next((a for a in all_albums if a.get('id') == album_id), None)
+                    if album_obj:
+                        type_tag = self._get_album_type_tag(album_obj)
+                
+                msg += f"👤 <b>{user}</b> is listening to:\n🎵 {title} - {artist} ({album_name}{type_tag}, {year})\n\n"
 
             self.send_message(message.chat.id, msg, parse_mode="HTML")
 
@@ -479,6 +507,75 @@ class TelegramBot:
         return chunks
 
     @staticmethod
+    def _get_album_type_tag(album: Dict) -> str:
+        """
+        Extract and format the album release type tag.
+        
+        :param album: Album dictionary from Navidrome API.
+        :return: Formatted tag string like " [EP]" or empty string for studio albums.
+        """
+        # Map release types to display labels
+        type_map = {
+            "ep": "EP",
+            "single": "Single",
+            "live": "Live",
+            "compilation": "Compilation",
+            "soundtrack": "Soundtrack",
+            "other": "Other"
+        }
+        
+        detected_type = None
+        
+        # 1. Check standard OpenSubsonic releaseTypes (list of strings)
+        release_types = album.get("releaseTypes", [])
+        if isinstance(release_types, list):
+            for t in release_types:
+                t_lower = t.lower()
+                if t_lower in type_map:
+                    detected_type = type_map[t_lower]
+                    break
+                    
+        # 2. Fallback to standard Subsonic isCompilation flag
+        if not detected_type and album.get("isCompilation"):
+            detected_type = "Compilation"
+            
+        # 3. Heuristic: Check if title already contains keywords
+        title = album.get("name", "")
+        if not detected_type:
+            title_lower = title.lower()
+            
+            # Sub-maps for broader detection
+            compilation_keywords = ["compilation", "anthology", "collection", "complete", "hits", "best of", "essentials", "box set"]
+            
+            for key, label in type_map.items():
+                if f" {key}" in title_lower or f"({key}" in title_lower or f"[{key}" in title_lower:
+                    detected_type = label
+                    break
+            
+            # Additional check for compilation synonyms
+            if not detected_type:
+                for word in compilation_keywords:
+                    if f" {word}" in title_lower or f"({word}" in title_lower or f"[{word}" in title_lower:
+                        detected_type = "Compilation"
+                        break
+        
+        if detected_type:
+            # Strictly ensure brackets are used
+            tag = f"[{detected_type}]"
+            title_stripped = title.strip()
+            
+            # Check if title already ends with this tag (in any bracket style)
+            if title_stripped.endswith(f" {tag}") or \
+               title_stripped.endswith(f" [{detected_type.lower()}]") or \
+               title_stripped.endswith(f" ({detected_type})") or \
+               title_stripped.endswith(f" ({detected_type.lower()})"):
+                return ""
+            
+            return f" {tag}"
+            
+        return ""
+
+    @staticmethod
     def format_size(size_bytes: int) -> str:
         """
         Format a size in bytes into a human-readable string (MB, GB, TB).
@@ -513,6 +610,7 @@ class TelegramBot:
         for album in albums:
             title = album.get("name", "Unknown Album")
             artist = album.get("artist", "Unknown Artist")
+            type_tag = TelegramBot._get_album_type_tag(album)
 
             # Year or Date
             date_display = str(album.get("year", ""))
@@ -541,7 +639,7 @@ class TelegramBot:
             if not genre_str:
                 genre_str = album.get("genre", "")
 
-            message += f"💿 <b>{title}</b>\n"
+            message += f"💿 <b>{title}</b>{type_tag}\n"
             message += f"👤 {artist}\n"
             message += f"📅 {date_display}\n"
             if genre_str:

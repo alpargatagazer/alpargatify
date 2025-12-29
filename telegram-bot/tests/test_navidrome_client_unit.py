@@ -116,5 +116,36 @@ class TestNavidromeClientUnit(unittest.TestCase):
         self.assertEqual(len(playing), 1)
         self.assertEqual(playing[0]['username'], 'user1')
 
+    @patch('navidrome_client.NavidromeClient.sync_library')
+    def test_get_server_stats_with_size(self, mock_sync):
+        # Mock enriched albums with sizes
+        mock_sync.return_value = [
+            {'id': 'alb1', 'artist': 'Artist 1', 'songCount': 10, 'total_size_bytes': 1024},
+            {'id': 'alb1', 'artist': 'Artist 1', 'songCount': 5, 'total_size_bytes': 512}, # Same ID, different instance (should still count)
+            {'id': 'alb2', 'artist': 'Artist 2', 'songCount': 3, 'total_size_bytes': 256}
+        ]
+        
+        stats = self.client.get_server_stats()
+        self.assertEqual(stats['albums'], 3)
+        self.assertEqual(stats['artists'], 2)
+        self.assertEqual(stats['songs'], 18)
+        self.assertEqual(stats['size_bytes'], 1792)
+
+    @patch('navidrome_client.NavidromeClient._request')
+    def test_fetch_album_details_with_size(self, mock_request):
+        mock_request.return_value = {
+            'album': {
+                'id': 'alb1',
+                'name': 'Test Album',
+                'song': [
+                    {'id': 's1', 'size': 100},
+                    {'id': 's2', 'size': 200}
+                ]
+            }
+        }
+        
+        album = self.client._fetch_album_details('alb1')
+        self.assertEqual(album['total_size_bytes'], 300)
+
 if __name__ == '__main__':
     unittest.main()
