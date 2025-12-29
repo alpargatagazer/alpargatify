@@ -21,11 +21,11 @@ services:
   syncthing:
     image: syncthing/syncthing:2.0.12
     user: ${PUID}:${PGID}
-    profiles: ["extra-storage"]
+    profiles: [ "extra-storage" ]
     container_name: syncthing
     labels:
       - 'wud.tag.include=^\d+\.\d+\.\d+$$'
-    entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
+    entrypoint: [ "/usr/local/bin/docker-entrypoint.sh" ]
     environment:
       TZ: ${TZ}
       PUID: ${PUID}
@@ -49,20 +49,20 @@ services:
       - frontend
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "curl --fail -sS http://127.0.0.1:8384/rest/noauth/health >/dev/null || exit 1"]
+      test: [ "CMD", "sh", "-c", "curl --fail -sS http://127.0.0.1:8384/rest/noauth/health >/dev/null || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 3
 
   filebrowser:
-    image: filebrowser/filebrowser:v2.52.0
+    image: filebrowser/filebrowser:v2.53.0
     user: ${PUID}:${PGID}
-    profiles: ["extra-storage"]
+    profiles: [ "extra-storage" ]
     container_name: filebrowser
     labels:
       - 'wud.tag.include=^v\d+\.\d+\.\d+$$'
     # Use a custom entrypoint to initialise DB + admin user (mapped below)
-    entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
+    entrypoint: [ "/usr/local/bin/docker-entrypoint.sh" ]
     environment:
       TZ: ${TZ}
       PUID: ${PUID}
@@ -83,7 +83,7 @@ services:
       - frontend
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget --quiet --tries=1 --timeout=3 -O - http://127.0.0.1:8080/ || exit 1"]
+      test: [ "CMD", "sh", "-c", "wget --quiet --tries=1 --timeout=3 -O - http://127.0.0.1:8080/ || exit 1" ]
       interval: 1m
       timeout: 10s
       retries: 3

@@ -66,26 +66,38 @@ item_fields:
   disc_and_track: f"{disc:02d}.{track:02d}" if disctotal > 1 else f"{track:02d}"
 
   formatted_albumartist: |
-    import sys
-    # If the name is ascii we keep it like that
-    if albumartist.isascii():
+    import unicodedata
+
+    def clean(s):
+        if not s:
+            return ""
+        # Normalize to NFD to separate combining marks (accents) from base characters
+        # This handles cases like 'á' vs 'a' + '´', very common on macOS
+        normalized = unicodedata.normalize('NFD', s)
+        # Filter out non-spacing marks (accents/Mn category)
+        cleaned = "".join(c for c in normalized if unicodedata.category(c) != 'Mn')
+        # Remove common delimiters and lowercase for robust comparison
+        for char in " []()-._,_":
+            cleaned = cleaned.replace(char, "")
+        return cleaned.lower()
+
+    # Get the transliterated name from sort fields
+    latin = albumartist_sort
+    # Small cleaning if the sort name is "Haino, Keiji" -> "Keiji Haino"
+    if "," in latin:
+        parts = latin.split(", ")
+        if len(parts) == 2:
+            latin = f"{parts[1]} {parts[0]}"
+    
+    # If normalized names are similar enough, avoid adding brackets
+    # This (cl == ca or cl in ca or ca in cl) handles Spanish names and Japanese/Latin mixes
+    # The sorted(list) comparison handles Western reordering like "First Last" vs "Last, First"
+    cl = clean(latin)
+    ca = clean(albumartist)
+    if cl == ca or cl in ca or ca in cl or sorted(list(cl)) == sorted(list(ca)):
         return albumartist
-    else:
-        # If it has non-ascii characters we use the 'albumartist_sort' that usually is latin
-        # Example: It will return "Fishmans [フィッシュマンズ]"
-        latin = albumartist_sort
-        # Small cleaning if the sort name is "Haino, Keiji" -> "Keiji Haino" (optional, but recommended)
-        if "," in latin:
-            parts = latin.split(", ")
-            if len(parts) == 2:
-                latin = f"{parts[1]} {parts[0]}"
         
-        # Check if the latin/transliterated name is already present in the artist name
-        # to avoid folders like "Artist [Artist]"
-        if latin.lower() in albumartist.lower():
-            return albumartist
-            
-        return f"{albumartist} [{latin}]"
+    return f"{albumartist} [{latin}]"
 
 # ----------------------------------------------------------------------------
 # ALBUM TYPES

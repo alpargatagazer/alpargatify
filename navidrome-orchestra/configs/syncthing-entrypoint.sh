@@ -59,6 +59,12 @@ add_folder() {
             rescanIntervalS="3600" fsWatcherEnabled="true"
             ignorePerms="false" autoNormalize="true">
       <filesystemType>basic</filesystemType>
+      <versioning type="trashcan">
+        <param key="cleanoutDays" val="3"></param>
+        <cleanupIntervalS>3600</cleanupIntervalS>
+        <fsPath></fsPath>
+        <fsType>basic</fsType>
+      </versioning>
     </folder>
 EOF
 
@@ -73,6 +79,45 @@ EOF
   }' "$config_xml" > "$tmp" && mv "$tmp" "$config_xml"
 
   log "Inserted folder '$label' into config"
+}
+
+# Ensure versioning is present for a given path
+ensure_versioning() {
+  local path="$1"
+  local config_xml="$CONFIG_HOME/config.xml"
+
+  # Check if the folder at this path already has versioning
+  if sed -n "/path=\"$path\"/,/<\/folder>/p" "$config_xml" | grep -q "<versioning"; then
+    log "Versioning already present for folder at '$path' — skipping"
+    return
+  fi
+
+  log "Adding versioning to existing folder at '$path'"
+
+  local versioning_block
+  read -r -d '' versioning_block <<EOF || true
+      <versioning type="trashcan">
+        <param key="cleanoutDays" val="7"></param>
+        <cleanupIntervalS>3600</cleanupIntervalS>
+        <fsPath></fsPath>
+        <fsType>basic</fsType>
+      </versioning>
+EOF
+
+  local tmp
+  tmp="$(mktemp)"
+  # Insert the versioning block before </folder> for the section matching the path
+  awk -v path="$path" -v block="$versioning_block" '
+    BEGIN { inside=0; found=0 }
+    $0 ~ "path=\"" path "\"" { inside=1 }
+    inside && /<\/folder>/ && !found {
+      print block
+      found=1
+      inside=0
+    }
+    /<\/folder>/ { inside=0 }
+    { print }
+  ' "$config_xml" > "$tmp" && mv "$tmp" "$config_xml"
 }
 
 # ============================================================================
@@ -115,6 +160,10 @@ BACKUPS_FOLDER_ID=$(head -c 20 /dev/urandom | od -An -tx1 | tr -d ' \n')
 # Add folders to config
 add_folder "$MUSIC_FOLDER_ID" "$MUSIC_FOLDER_LABEL" "$MUSIC_PATH"
 add_folder "$BACKUPS_FOLDER_ID" "$BACKUPS_FOLDER_LABEL" "$BACKUPS_PATH"
+
+# Ensure versioning is enabled for existing folders
+ensure_versioning "$MUSIC_PATH"
+ensure_versioning "$BACKUPS_PATH"
 
 # ============================================================================
 # 3) UPDATE GUI CREDENTIALS
