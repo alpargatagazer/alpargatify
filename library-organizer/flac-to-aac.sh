@@ -13,6 +13,10 @@ set -u              # Exit on undefined variables
 set -o pipefail     # Exit on pipe failures
 IFS=$'\n\t'         # Set Internal Field Separator to newline and tab
 
+# Ensure UTF-8 locale for filename and metadata handling
+export LANG="${LANG:-en_US.UTF-8}"
+export LC_ALL="${LC_ALL:-en_US.UTF-8}"
+
 ###############################################################################
 # Global variables
 ###############################################################################
@@ -375,26 +379,87 @@ apply_metadata_to_m4a() {
 
   # Export FLAC metadata tags to text file
   if metaflac --export-tags-to="$metafile" "$in_file" 2>/dev/null; then
-    # Parse metadata file and build AtomicParsley arguments
+    # Use associative arrays (if bash 4+) or just variables to collect tags for track/disc pairing
+    local track_num="" track_total=""
+    local disc_num="" disc_total=""
+    local year="" date="" original_date=""
+
+    # Parse metadata file
     while IFS= read -r line || [ -n "$line" ]; do
       [ -z "$line" ] && continue
       local key="${line%%=*}"
       local val="${line#*=}"
+      local upper_key
+      upper_key="$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')"
       
       # Map FLAC tags to M4A tags
-      case "$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')" in
+      case "$upper_key" in
         TITLE) ap_args+=( --title "$val" ) ;;
         ARTIST) ap_args+=( --artist "$val" ) ;;
         ALBUM) ap_args+=( --album "$val" ) ;;
-        TRACKNUMBER) ap_args+=( --tracknum "$val" ) ;;
-        DATE|YEAR) ap_args+=( --year "$val" ) ;;
-        GENRE) ap_args+=( --genre "$val" ) ;;
-        COMMENT) ap_args+=( --comment "$val" ) ;;
         ALBUMARTIST) ap_args+=( --albumArtist "$val" ) ;;
         COMPOSER) ap_args+=( --composer "$val" ) ;;
-        DISCNUMBER) ap_args+=( --disk "$val" ) ;;
+        GENRE) ap_args+=( --genre "$val" ) ;;
+        COMMENT) ap_args+=( --comment "$val" ) ;;
+        LYRICS) ap_args+=( --lyrics "$val" ) ;;
+        COPYRIGHT) ap_args+=( --copyright "$val" ) ;;
+        ENCODEDBY) ap_args+=( --encodedBy "$val" ) ;;
+        GROUPING) ap_args+=( --grouping "$val" ) ;;
+        
+        # Track and Disc numbers (collect for pairing)
+        TRACKNUMBER) track_num="$val" ;;
+        TRACKTOTAL|TOTALTRACKS) track_total="$val" ;;
+        DISCNUMBER) disc_num="$val" ;;
+        DISCTOTAL|TOTALDISCS) disc_total="$val" ;;
+        
+        # Date handling
+        DATE) date="$val" ;;
+        YEAR) year="$val" ;;
+        ORIGINALDATE) original_date="$val" ;;
+
+        # Extended/Special tags using rDNS
+        ARTISTSORT) ap_args+=( --rDNSatom "$val" name="ARTISTSORT" domain="com.apple.iTunes" ) ;;
+        ALBUMARTISTSORT) ap_args+=( --rDNSatom "$val" name="ALBUMARTISTSORT" domain="com.apple.iTunes" ) ;;
+        ALBUMSORT) ap_args+=( --rDNSatom "$val" name="ALBUMSORT" domain="com.apple.iTunes" ) ;;
+        TITLESORT) ap_args+=( --rDNSatom "$val" name="TITLESORT" domain="com.apple.iTunes" ) ;;
+        COMPOSERSORT) ap_args+=( --rDNSatom "$val" name="COMPOSERSORT" domain="com.apple.iTunes" ) ;;
+        
+        ISRC) ap_args+=( --rDNSatom "$val" name="ISRC" domain="com.apple.iTunes" ) ;;
+        LABEL|ORGANIZATION|PUBLISHER) ap_args+=( --rDNSatom "$val" name="LABEL" domain="com.apple.iTunes" ) ;;
+        BARCODE) ap_args+=( --rDNSatom "$val" name="BARCODE" domain="com.apple.iTunes" ) ;;
+        CATALOGNUMBER) ap_args+=( --rDNSatom "$val" name="CATALOGNUMBER" domain="com.apple.iTunes" ) ;;
+        
+        # MusicBrainz IDs
+        MUSICBRAINZ_TRACKID) ap_args+=( --rDNSatom "$val" name="MusicBrainz Track Id" domain="com.apple.iTunes" ) ;;
+        MUSICBRAINZ_ALBUMID) ap_args+=( --rDNSatom "$val" name="MusicBrainz Album Id" domain="com.apple.iTunes" ) ;;
+        MUSICBRAINZ_ARTISTID) ap_args+=( --rDNSatom "$val" name="MusicBrainz Artist Id" domain="com.apple.iTunes" ) ;;
+        MUSICBRAINZ_ALBUMARTISTID) ap_args+=( --rDNSatom "$val" name="MusicBrainz Album Artist Id" domain="com.apple.iTunes" ) ;;
+        MUSICBRAINZ_RELEASEGROUPID) ap_args+=( --rDNSatom "$val" name="MusicBrainz Release Group Id" domain="com.apple.iTunes" ) ;;
       esac
     done < "$metafile"
+
+    # Assemble track and disc strings (X/Y format)
+    if [ -n "$track_num" ]; then
+      if [ -n "$track_total" ]; then
+        ap_args+=( --tracknum "$track_num/$track_total" )
+      else
+        ap_args+=( --tracknum "$track_num" )
+      fi
+    fi
+    if [ -n "$disc_num" ]; then
+      if [ -n "$disc_total" ]; then
+        ap_args+=( --disk "$disc_num/$disc_total" )
+      else
+        ap_args+=( --disk "$disc_num" )
+      fi
+    fi
+
+    # Pick the best date available
+    local final_date=""
+    if [ -n "$original_date" ]; then final_date="$original_date";
+    elif [ -n "$date" ]; then final_date="$date";
+    elif [ -n "$year" ]; then final_date="$year"; fi
+    [ -n "$final_date" ] && ap_args+=( --year "$final_date" )
 
     # Extract and include album artwork if present
     local picfile="$TMPD2/cover"
@@ -404,7 +469,7 @@ apply_metadata_to_m4a() {
       # Detect image format and add appropriate extension
       if command -v file >/dev/null 2>&1; then
         local ftype
-        ftype=$(file --brief --mime-type "$picfile" 2>/dev/null || echo "image/jpeg")
+        ftype="$(file --brief --mime-type "$picfile" 2>/dev/null || echo "image/jpeg")"
         case "$ftype" in
           image/png) picfile_ext="${picfile}.png" ;;
           image/jpeg) picfile_ext="${picfile}.jpg" ;;
