@@ -1,4 +1,5 @@
 import logging
+import math
 from functools import wraps
 from typing import Optional, List, Dict
 
@@ -116,11 +117,15 @@ class TelegramBot:
                 stats = self.navidrome.get_server_stats()
                 
                 if stats:
+                    size_bytes = stats.get('size_bytes', 0)
+                    formatted_size = self.format_size(size_bytes)
+                    
                     stats_text = (
                         "📊 *Navidrome Library Statistics*\n\n"
                         f"💿 Albums: {stats.get('albums', 'N/A')}\n"
                         f"👤 Artists: {stats.get('artists', 'N/A')}\n"
                         f"🎵 Songs: {stats.get('songs', 'N/A')}\n"
+                        f"📦 Total Size: {formatted_size}\n"
                     )
                     self.send_message(message.chat.id, stats_text, parse_mode="Markdown")
                 else:
@@ -472,6 +477,23 @@ class TelegramBot:
         
         logger.info(f"Split message into {len(chunks)} parts.")
         return chunks
+
+    @staticmethod
+    def format_size(size_bytes: int) -> str:
+        """
+        Format a size in bytes into a human-readable string (MB, GB, TB).
+        
+        :param size_bytes: Size in bytes.
+        :return: Formatted string (e.g. "1.2 GB").
+        """
+        if size_bytes <= 0:
+            return "0 B"
+        
+        size_names = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+        i = int(math.floor(math.log(size_bytes, 1024)))
+        p = math.pow(1024, i)
+        s = round(size_bytes / p, 2)
+        return f"{s} {size_names[i]}"
 
     @staticmethod
     def format_album_list(albums: List[Dict], intro_text: str) -> Optional[str]:
