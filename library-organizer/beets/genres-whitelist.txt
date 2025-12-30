@@ -1174,6 +1174,7 @@ plainchant
 plena
 pleng phua cheewit
 pleng thai sakorn
+plunderphonics
 political hip hop
 polka
 polo
@@ -1530,6 +1531,7 @@ urban cowboy
 urban folk
 urban jazz
 vallenato
+vaporwave
 vaudeville
 venezuela
 verbunkos
