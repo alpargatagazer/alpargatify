@@ -187,11 +187,11 @@ fetchart:
   max_filesize: 1200000     # Max file size (~1.2 MB)
   enforce_ratio: 0.5%       # Accept approximately square images
   sources:
+    - filesystem            # Use original art in case there is
     - coverart: release     # Cover Art Archive by release ID
     - fanarttv
     - itunes
     - amazon
-    - filesystem
   store_source: no          # Do not store art source tag
   high_resolution: no       # Disable extremely high-res images
   deinterlace: no           # Keep progressive JPEGs
