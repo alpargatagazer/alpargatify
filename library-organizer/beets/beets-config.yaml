@@ -34,6 +34,9 @@ import:
   quiet: yes                # Non-interactive mode; no prompts
   autotag: yes              # Auto-fetch metadata from MusicBrainz
   duplicate_action: remove  # Remove old item before importing duplicate
+  duplicate_keys:
+    album: [albumartist, album, year, albumdisambig]
+    item: [artist, title, year]
 
 # ----------------------------------------------------------------------------
 # MATCHING SETTINGS
