@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # wrapper.sh
 #
-# Orchestrates FLAC to AAC conversion and beets music library import
+# Orchestrates FLAC to Lossy conversion and beets music library import
 # This wrapper script:
-#   1. Runs flac-to-aac.sh converter into a temporary directory (preserving paths)
+#   1. Runs flac-to-lossy.sh converter into a temporary directory (preserving paths)
 #   2. Runs a Docker Compose service (beets) to import from the temp directory
 #
 # Modes:
@@ -199,7 +199,7 @@ fi
 mkdir -p "$DEST"
 
 # Check converter script exists and is executable
-CONVERTER="$SCRIPT_DIR/flac-to-aac.sh"
+CONVERTER="$SCRIPT_DIR/flac-to-lossy.sh"
 if [ ! -x "$CONVERTER" ]; then 
   err "converter script not found or not executable at: $CONVERTER"
   exit 4
@@ -276,9 +276,9 @@ trap cleanup EXIT
 # Core functions
 ###############################################################################
 
-# Run the FLAC to AAC converter
+# Run the FLAC to Lossy converter
 # Writes converted files into TMP_DEST, preserving source directory structure
-# Uses flac-to-aac.sh script with appropriate flags
+# Uses flac-to-lossy.sh script with appropriate flags
 run_converter() {
   conv_args=()
   
