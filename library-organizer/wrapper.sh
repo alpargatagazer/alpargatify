@@ -387,7 +387,24 @@ info "-> invoking docker compose (beets import)"
 pushd "$SCRIPT_DIR/beets" >/dev/null
 
 # Create unique project name to allow parallel executions
-export PROJECT_NAME=$(basename "$SRC" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/_\+/_/g' | sed 's/^_//;s/_$//')
+
+# Sanitize the folder name to be docker-compose friendly (lowercase, alphanumeric, underscores)
+SANITIZED_NAME=$(basename "$SRC" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
+
+# If the sanitized name is empty (e.g. only special chars) or too short, use a hash of the full path
+if [ -z "$SANITIZED_NAME" ] || [ ${#SANITIZED_NAME} -lt 3 ]; then
+  # Use md5 (BSD/macOS) or md5sum (Linux)
+  if command -v md5 >/dev/null 2>&1; then
+    HASH=$(echo -n "$SRC" | md5)
+  else
+    HASH=$(echo -n "$SRC" | md5sum | awk '{print $1}')
+  fi
+  # Use a prefix + first 10 chars of hash to keep it readable but unique
+  export PROJECT_NAME="beets_import_${HASH:0:10}"
+  warn "Source directory name '$(basename "$SRC")' contains restricted characters. Using generated project name: $PROJECT_NAME"
+else
+  export PROJECT_NAME="$SANITIZED_NAME"
+fi
 
 # Run compose with unique project name
 VERBOSE=${VERBOSE} compose -p "$PROJECT_NAME" -f docker-compose.yml up --build --abort-on-container-exit
