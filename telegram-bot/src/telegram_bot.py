@@ -9,6 +9,9 @@ from telebot.types import Message
 
 from navidrome_client import NavidromeClient
 from secrets_loader import get_secret
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,24 @@ class TelegramBot:
             raise ValueError("telegram_bot_token not found in secrets")
         
         self.bot = telebot.TeleBot(token)
+        
+        # Configure global retries for Telegram API interactions
+        # This fixes intermittent 'Network is unreachable' errors during send_message
+        retry_strategy = Retry(
+            total=5,
+            backoff_factor=2,  # Increase backoff (2s, 4s, 8s, 16s, 32s)
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET", "POST"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        
+        # Create a new session with the adapter and assign it to apihelper
+        # This ensures proper initialization and usage of retries
+        session = requests.Session()
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        telebot.apihelper.session = session
+
         self.navidrome = NavidromeClient()
         
         # Load authorized chat ID(s) - can be single ID or comma-separated list
