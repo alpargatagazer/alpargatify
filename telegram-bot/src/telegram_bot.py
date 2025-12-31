@@ -1,5 +1,6 @@
 import logging
 import math
+import time
 from functools import wraps
 from typing import Optional, List, Dict
 
@@ -416,10 +417,21 @@ class TelegramBot:
     
     def start_polling(self) -> None:
         """
-        Start the bot polling loop (blocking).
+        Start the bot polling loop with a custom resilient mechanism.
+        Uses long-polling with increased timeout and backoff on error to prevent tight loops.
         """
-        logger.info("Starting Telegram bot polling...")
-        self.bot.infinity_polling()
+        logger.info("Starting resilient Telegram bot polling...")
+        
+        while True:
+            try:
+                # Use infinity_polling but with custom parameters for more control
+                # non_stop=True: try to recover on any error
+                # timeout: time between requests if no updates
+                # long_polling_timeout: time the request waits for new updates
+                self.bot.polling(non_stop=True, timeout=60, long_polling_timeout=30)
+            except Exception as e:
+                logger.error(f"Telegram polling crashed: {e}. Retrying in 5 seconds...", exc_info=True)
+                time.sleep(5)
 
     # ========== Notification Methods ==========
 
