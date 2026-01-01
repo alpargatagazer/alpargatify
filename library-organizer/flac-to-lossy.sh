@@ -528,7 +528,7 @@ process_all_files() {
   local error_count=0
   while IFS= read -r -d '' srcfile; do
     process_flac_file "$srcfile" || ((error_count++))
-  done < <(find "$SRC" -type f -iname '*.flac' -print0)
+  done < <(find "$SRC" -type f -iname '*.flac' ! -name '._*' -print0)
   return $error_count
 }
 
