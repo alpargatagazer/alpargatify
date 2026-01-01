@@ -651,11 +651,17 @@ class TelegramBot:
             if "releaseDate" in album:
                 rd = album["releaseDate"]
                 if isinstance(rd, dict):
-                    # Format dict {'year': 2021, 'month': 2, 'day': 23} to 2021-02-23
+                    # Format dict {'year': 2021, 'month': 2, 'day': 23}
                     y = rd.get('year', '????')
-                    m = rd.get('month', 1)
-                    d = rd.get('day', 1)
-                    date_display = f"{y}-{m:02d}-{d:02d}"
+                    m = rd.get('month')
+                    d = rd.get('day')
+                    
+                    if m and d:
+                        date_display = f"{y}-{m:02d}-{d:02d}"
+                    elif m:
+                        date_display = f"{y}-{m:02d}"
+                    else:
+                        date_display = str(y)
                 elif len(str(rd)) >= 4:
                      date_display = str(rd)
 
