@@ -8,7 +8,7 @@ This folder contains the Docker Compose files, configuration templates and helpe
 - **Core**: `docker-compose-core.yml` — runs **Navidrome** and an init helper to set ownership.
 - **Monitor**: `docker-compose-monitor.yml` — runs **Prometheus**, **Grafana** and **node-exporter** for observability.
 - **Network**: `docker-compose-network.yml` — runs **Caddy** (TLS/HTTP reverse proxy).
-- **Storage / Extras**: `docker-compose-storage.yml` & `docker-compose-extratools.yml` — run **SFTP**, **Syncthing**, **FileBrowser** and **WUD** (web UI for triggers/management).
+- **Storage / Extras**: `docker-compose-storage.yml` & `docker-compose-extratools.yml` — run **SFTP**, **Syncthing**, **FileBrowser**, **WUD** and **MusicBrainz Picard**.
 - **Bootstrap helper**: `bootstrap.sh` — prepares directories, renders config templates, validates environment and launches the composed services.
 - **Library creation helper**: `new-library.sh` — creates a new Navidrome library and FileBrowser user for isolated user access.
 
@@ -20,6 +20,7 @@ This folder contains the Docker Compose files, configuration templates and helpe
 - **Navidrome**: the music streaming server.
 - **Syncthing**, **FileBrowser**, **SFTP**: optional storage and access helpers.
 - **WUD**: web UI that can trigger compose actions (optional, profile-enabled).
+- **MusicBrainz Picard**: music tagger and organizer (optional, profile-enabled).
 
 ## What this is for
 This setup is intended to run on a remote server (VPS or VM). It brings up a robust music server (**Navidrome**) and a small set of microservices that help operate and observe that server: TLS routing and certificates (**Caddy**), metrics collection and dashboards (**Prometheus** + **Grafana**), container-level exporters (**node-exporter**), storage/exchange helpers (**Syncthing**, **FileBrowser**, **SFTP**), and a management UI to make sure your containers are updated (**WUD**).
@@ -39,11 +40,12 @@ Optional but commonly required depending on enabled profiles:
 - `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` — required if monitoring is enabled.
 - `SYNCTHING_GUI_USER`, `SYNCTHING_GUI_PASSWORD` — required if extra-storage profile is enabled.
 - `FILEBROWSER_ADMIN_USER`, `FILEBROWSER_ADMIN_PASSWORD` — required for filebrowser.
+- `PICARD_ADMIN_USER`, `PICARD_ADMIN_PASSWORD` — required for MusicBrainz Picard.
 
 See the comments in `bootstrap.sh` for additional variable expectations and port names (any env variable that ends with `_PORT` will be validated).
 
 ## What `bootstrap.sh` does
-- Creates missing directories such as `volumes/`, `backgrounds/` and your configured `NAVIDROME_MUSIC_PATH`.
+- Creates missing directories such as `volumes/` and your configured `NAVIDROME_MUSIC_PATH`.
 - Validates key `.env` variables and checks presence of required credentials for enabled profiles.
 - Computes numeric `PUID` and `PGID` from the owner of `NAVIDROME_MUSIC_PATH` and exports them for use by containers.
 - Generates a random `CUSTOM_METRICS_PATH` (e.g. `/metrics-abcdef12`) and a random `NAVIDROME_METRICS_PASSWORD` for Prometheus scraping.
@@ -76,6 +78,7 @@ chmod +x ./bootstrap.sh
 ./bootstrap.sh --no-wud   			# bring services up but disable the 'wud' profile
 ./bootstrap.sh --no-monitoring  	# disable the monitoring profile (Prometheus/Grafana/exports)
 ./bootstrap.sh --no-extra-storage	# disable extra storage services (Syncthing/FileBrowser)
+./bootstrap.sh --no-picard      	# disable MusicBrainz Picard
 ./bootstrap.sh --prod     			# run in production mode (Caddy uses https in templates)
 ```
 
@@ -84,6 +87,7 @@ Flags explained:
 - `--no-wud`: disable the `wud` profile so the `WUD` service and any profile-tagged services are not started.
 - `--no-extra-storage`: disable the `extra-storage` profile (disables `syncthing` and `filebrowser`).
 - `--no-monitoring`: disable the `monitoring` profile (disables Prometheus, Grafana, exporters).
+- `--no-picard`: disable the `picard` profile (disables MusicBrainz Picard).
 - `--prod`: tells template rendering to use production behavior (sets `PROTOCOL=https` for templates/Caddy).
 - `-h|--help`: prints usage and exits.
 
@@ -95,12 +99,13 @@ Implementation notes about profiles:
 - **Init helper** (`init-chown`): one-shot container that ensures ownership of `volumes/` and `music/` matches `PUID:PGID` before other containers run.
 - **Caddy** (`docker-compose-network.yml`): TLS termination and routing to internal services (exposes ports 80 and 443). Uses `configs/Caddyfile.custom` after rendering.
 - **Prometheus** (`docker-compose-monitor.yml`): scrapes metrics from services (including Navidrome at the generated `CUSTOM_METRICS_PATH`). Rendered config is `configs/prometheus.yml.custom`.
-- **Grafana** (`docker-compose-monitor.yml`): dashboard for Prometheus data and pre-provisioned dashboards in `grafana-dashboards/`.
+- **Grafana** (`docker-compose-monitor.yml`): dashboard for Prometheus data and pre-provisioned dashboards in `grafana-dashboards/`. Accessible via web UI at `grafana.<domain>`.
 - **node-exporter** (`docker-compose-monitor.yml`): provide container and host metrics for Prometheus.
 - **SFTP** (`docker-compose-storage.yml`): exposes SFTP access to the `NAVIDROME_MUSIC_PATH` for uploads or remote sync.
-- **Syncthing** (`docker-compose-storage.yml`, profile `extra-storage`): optional synchronisation service that can mirror music folders between hosts. Two folders are created at its init: one for syncing your music with a remote server and the other to sync the **Navidrome** backups. 
-- **FileBrowser** (`docker-compose-storage.yml`, profile `extra-storage`): web UI for browsing and managing files inside the music folder.
-- **WUD** (`docker-compose-extratools.yml`, profile `wud`): optional management web UI that can trigger docker-compose actions based on the bundled compose files. Useful for remote triggers and scheduled actions — keep it disabled if you do not want remote-trigger abilities.
+- **Syncthing** (`docker-compose-storage.yml`, profile `extra-storage`): optional synchronisation service that can mirror music folders between hosts. Two folders are created at its init: one for syncing your music with a remote server and the other to sync the **Navidrome** backups. Accessible via web UI at `syncthing.<domain>`.
+- **FileBrowser** (`docker-compose-storage.yml`, profile `extra-storage`): web UI for browsing and managing files inside the music folder. Accessible via web UI at `filebrowser.<domain>`.
+- **WUD** (`docker-compose-extratools.yml`, profile `wud`): optional management web UI that can trigger docker-compose actions based on the bundled compose files. Useful for remote triggers and scheduled actions — keep it disabled if you do not want remote-trigger abilities. Accessible via web UI at `wud.<domain>`.
+- **MusicBrainz Picard** (`docker-compose-extratools.yml`, profile `picard`): optional music tagger and organizer. Accessible via web UI at `picard.<domain>`.
 
 ## Safety and secrets
 - `bootstrap.sh` validates presence of required secrets in `.env` and will refuse to run or warn when critical secrets are missing for enabled profiles.

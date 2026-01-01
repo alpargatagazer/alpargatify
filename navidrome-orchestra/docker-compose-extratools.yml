@@ -2,7 +2,7 @@ services:
 
   wud:
     image: getwud/wud:main
-    profiles: ["wud"]
+    profiles: [ "wud" ]
     container_name: wud
     labels:
       wud.watch: false
@@ -44,3 +44,24 @@ services:
       interval: 10s
       timeout: 10s
       retries: 3
+
+  picard:
+    image: jlesage/musicbrainz-picard:latest
+    profiles: [ "picard" ]
+    container_name: picard
+    environment:
+      TZ: ${TZ}
+      USER_ID: ${PUID}
+      GROUP_ID: ${PGID}
+      SECURE_CONNECTION: 1
+      WEB_AUTHENTICATION: 1
+      WEB_AUTHENTICATION_USERNAME: ${PICARD_ADMIN_USER}
+      WEB_AUTHENTICATION_PASSWORD: ${PICARD_ADMIN_PASSWORD}
+      DARK_MODE: 1
+      TAKE_CONFIG_OWNERSHIP: 1
+    volumes:
+      - "${VOLUMES_PATH}/picard:/config"
+      - "${NAVIDROME_MUSIC_PATH}:/storage:rw"
+    networks:
+      - frontend
+    restart: unless-stopped

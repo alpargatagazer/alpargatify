@@ -12,12 +12,13 @@
 #
 # Profiles (compose):
 #   By default the script will ENABLE all known profiles so profile-tagged services are started.
-#   Known profiles (as of this script): "extra-storage", "wud", "monitoring"
+#   Known profiles (as of this script): "extra-storage", "wud", "monitoring", "picard"
 #
 #   You can selectively DISABLE any of those profiles using flags:
 #     --no-wud             : disable the "wud" profile
 #     --no-extra-storage   : disable the "extra-storage" profile
 #     --no-monitoring      : disable the "monitoring" profile
+#     --no-picard          : disable the "picard" profile
 #
 #   Behavior:
 #     - Default behavior: all three profiles are enabled and any service in those profiles
@@ -106,13 +107,14 @@ MODE="up" # values: up (default), down
 ENABLE_WUD=1
 ENABLE_EXTRA_STORAGE=1
 ENABLE_MONITORING=1
+ENABLE_PICARD=1
 # - local: default behavior, <protocol>="http"
 # - prod:  production behavior, <protocol>="https"
 PROD_MODE=0   # 0=local, 1=prod
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--down] [--no-wud] [--no-extra-storage] [--no-monitoring] [-h|--help]
+Usage: $(basename "$0") [--down] [--no-wud] [--no-extra-storage] [--no-monitoring] [--no-picard] [-h|--help]
 
 Modes:
   (default)         : bring services up (docker compose up -d)
@@ -122,6 +124,7 @@ Profile control (defaults: all enabled):
   --no-wud          : disable the "wud" profile (services in this profile will not be started)
   --no-extra-storage: disable the "extra-storage" profile
   --no-monitoring   : disable the "monitoring" profile
+  --no-picard       : disable the "picard" profile
   --prod            : Caddy starts using HTTPS
 
 Examples:
@@ -139,6 +142,7 @@ while (( "$#" )); do
     --no-wud) ENABLE_WUD=0; shift ;;
     --no-extra-storage) ENABLE_EXTRA_STORAGE=0; shift ;;
     --no-monitoring) ENABLE_MONITORING=0; shift ;;
+    --no-picard) ENABLE_PICARD=0; shift ;;
     -h|--help) usage; exit 0 ;;
     --) shift; break ;;
     -*) echo "Unknown option: $1" >&2; usage; exit 2 ;;
@@ -191,7 +195,12 @@ if [ -z "${SYNCTHING_GUI_USER:-}" ] || [ -z "${SYNCTHING_GUI_PASSWORD:-}" ] && [
 fi
 
 if [ -z "${FILEBROWSER_ADMIN_USER:-}" ] || [ -z "${FILEBROWSER_ADMIN_PASSWORD:-}" ] && [ $ENABLE_EXTRA_STORAGE -eq 1 ]; then
-  warn "GRAFANA_ADMIN_USER and GRAFANA_ADMIN_PASSWORD must be set in .env. Exiting."
+  warn "FILEBROWSER_ADMIN_USER and FILEBROWSER_ADMIN_PASSWORD must be set in .env. Exiting."
+  exit 3
+fi
+
+if [ -z "${PICARD_ADMIN_USER:-}" ] || [ -z "${PICARD_ADMIN_PASSWORD:-}" ] && [ $ENABLE_PICARD -eq 1 ]; then
+  warn "PICARD_ADMIN_USER and PICARD_ADMIN_PASSWORD must be set in .env if Picard is enabled. Exiting."
   exit 3
 fi
 
@@ -252,7 +261,7 @@ fi
 
 # Show which secrets are present without printing their values
 echo "Secrets present:"
-for s in WUD_ADMIN_PASSWORD GRAFANA_ADMIN_PASSWORD SFTP_PASSWORD SYNCTHING_GUI_PASSWORD FILEBROWSER_ADMIN_PASSWORD; do
+for s in WUD_ADMIN_PASSWORD GRAFANA_ADMIN_PASSWORD SFTP_PASSWORD SYNCTHING_GUI_PASSWORD FILEBROWSER_ADMIN_PASSWORD PICARD_ADMIN_PASSWORD; do
   if [[ -n "${!s:-}" ]]; then
     echo "  - ${s}=<set>"
   else
@@ -265,6 +274,7 @@ echo "Compose profiles (defaults: enabled):"
 printf "  - extra-storage: %s\n" "$( [[ $ENABLE_EXTRA_STORAGE -eq 1 ]] && echo "enabled" || echo "disabled" )"
 printf "  - wud          : %s\n" "$( [[ $ENABLE_WUD -eq 1 ]] && echo "enabled" || echo "disabled" )"
 printf "  - monitoring   : %s\n" "$( [[ $ENABLE_MONITORING -eq 1 ]] && echo "enabled" || echo "disabled" )"
+printf "  - picard       : %s\n" "$( [[ $ENABLE_PICARD -eq 1 ]] && echo "enabled" || echo "disabled" )"
 
 echo "======================================"
 echo
@@ -308,15 +318,6 @@ else
   info "Volumes directory exists: $VOLUMES_PATH"
 fi
 export VOLUMES_PATH
-# Path where the backgrounds for Navidrome login page are saved
-BACKGROUNDS_PATH="${BACKGROUNDS_PATH:-$SCRIPT_DIR/backgrounds}"
-if [[ ! -d "$BACKGROUNDS_PATH" ]]; then
-  warn "Backgrounds directory does not exist; creating: $BACKGROUNDS_PATH"
-  mkdir -p "$BACKGROUNDS_PATH"
-else
-  info "Backgrounds directory exists: $BACKGROUNDS_PATH"
-fi
-export BACKGROUNDS_PATH
 
 ###############################################################################
 # Extract numeric uid/gid for both paths and ensure they match
@@ -593,6 +594,9 @@ if [[ $SUPPORTS_PROFILE -eq 1 ]]; then
   fi
   if [[ $ENABLE_MONITORING -eq 1 ]]; then
     PROFILE_ARGS+=( --profile monitoring )
+  fi
+  if [[ $ENABLE_PICARD -eq 1 ]]; then
+    PROFILE_ARGS+=( --profile picard )
   fi
   if [[ $PROD_MODE -eq 1 ]]; then
     PROFILE_ARGS+=( --profile prod )

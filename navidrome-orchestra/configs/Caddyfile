@@ -40,6 +40,16 @@
     }
 }
 
+<protocol>://picard.<domain> {
+    route {
+        reverse_proxy https://picard:5800 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+}
+
 # Internal monitoring endpoints - do NOT expose to the internet
 <protocol>://prometheus.<domain> {
     @allowed client_ip 127.0.0.1 172.16.0.0/8 192.168.0.0/16

@@ -13,7 +13,6 @@ services:
       ND_LASTFM_SECRET: ${LASTFM_SECRET}
       ND_PROMETHEUS_METRICSPATH: ${CUSTOM_METRICS_PATH}
       ND_PROMETHEUS_PASSWORD: ${NAVIDROME_METRICS_PASSWORD}
-      ND_UILOGINBACKGROUNDURL: /backgrounds
       # Backups are saved under your Navidrome volume
       ND_BACKUP_PATH: /data/backup/
       # This is needed during first boot
@@ -23,13 +22,12 @@ services:
       - "${NAVIDROME_EXTRA_LIBRARIES_PATH}:/extra-libraries:ro"
       - "${VOLUMES_PATH}/navidrome:/data"
       - "./configs/navidrome.toml:/navidrome.toml:ro"
-      - "${BACKGROUNDS_PATH}:/backgrounds:ro"
     networks:
       - frontend
       - monitoring
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget --quiet --tries=1 --timeout=3 -O - http://127.0.0.1:4533/ || exit 1"]
+      test: [ "CMD", "sh", "-c", "wget --quiet --tries=1 --timeout=3 -O - http://127.0.0.1:4533/ || exit 1" ]
       interval: 1m
       timeout: 10s
       retries: 3
