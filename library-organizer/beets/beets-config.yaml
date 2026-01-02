@@ -71,6 +71,18 @@ item_fields:
   formatted_albumartist: |
     import unicodedata
 
+    def needs_transliteration(s):
+        for char in s:
+            if unicodedata.category(char).startswith('L'): # It's a letter
+                try:
+                    name = unicodedata.name(char)
+                    # If it's a letter but NOT Latin, we need transliteration
+                    if "LATIN" not in name:
+                        return True
+                except ValueError:
+                    continue
+        return False
+
     def clean(s):
         if not s:
             return ""
@@ -83,6 +95,11 @@ item_fields:
         for char in " []()-._,_":
             cleaned = cleaned.replace(char, "")
         return cleaned.lower()
+
+    # If the name only contains Latin letters (even with accents/curly quotes),
+    # then we don't need the bracketed sort name.
+    if not needs_transliteration(albumartist):
+        return albumartist
 
     # Get the transliterated name from sort fields
     latin = albumartist_sort

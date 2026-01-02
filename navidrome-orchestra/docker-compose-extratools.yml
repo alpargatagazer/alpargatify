@@ -49,6 +49,8 @@ services:
     image: jlesage/musicbrainz-picard:latest
     profiles: [ "picard" ]
     container_name: picard
+    labels:
+      - 'wud.tag.include=^v\d+\.\d+\.\d+$$'
     environment:
       TZ: ${TZ}
       USER_ID: ${PUID}

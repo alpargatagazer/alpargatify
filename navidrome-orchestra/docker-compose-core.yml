@@ -33,8 +33,11 @@ services:
       retries: 3
 
   init-chown:
-    image: alpine:3.22
+    image: alpine:latest
     container_name: init-chown
+    labels:
+      - 'wud.tag.include=latest'
+      - 'wud.watch.digest=true'
     # run as root (default) and perform a safe chown only when /volumes and /music exists
     command: >
       sh -euxc '
