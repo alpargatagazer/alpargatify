@@ -2,6 +2,7 @@ services:
   telegram-bot:
     build: .
     container_name: navidrome_telegram_bot
+    user: "${UID:-1000}:${GID:-1000}"
     restart: unless-stopped
     environment:
       - TZ=Europe/Madrid

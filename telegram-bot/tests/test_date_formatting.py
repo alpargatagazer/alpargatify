@@ -9,12 +9,16 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 's
 from telegram_bot import TelegramBot
 
 class TestDateFormatting(unittest.TestCase):
-    def setUp(self):
-        # TelegramBot init requires secrets, so we mock or bypass it if possible.
-        # But format_album_list is a static method (or independent enough) in our refactor?
-        # Actually format_album_list is a static method in my previous edit!
-        # Let's verify if I made it static. Yes, line 628 in previous view showed @staticmethod.
-        pass
+    def test_original_vs_release_date(self):
+        """Test that originalReleaseDate is preferred if it has more detail."""
+        album = {
+            "name": "Priority Test",
+            "artist": "Artist",
+            "releaseDate": {"year": 2024},
+            "originalReleaseDate": {"year": 2024, "month": 5, "day": 17}
+        }
+        msg = TelegramBot.format_album_list([album], "Test")
+        self.assertIn("📅 2024-05-17", msg)
 
     def test_full_date(self):
         """Test formatting with full Year-Month-Day."""

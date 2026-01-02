@@ -609,6 +609,52 @@ class TelegramBot:
         return ""
 
     @staticmethod
+    def _extract_best_date(album: Dict) -> Optional[str]:
+        """
+        Extract the most detailed date string available from the album metadata.
+        Prioritizes fields with year+month+day over year-only fields.
+        """
+        possible_keys = ["originalReleaseDate", "releaseDate"]
+        
+        candidates = []
+        for key in possible_keys:
+            val = album.get(key)
+            if not val:
+                continue
+                
+            if isinstance(val, dict):
+                y = val.get('year')
+                m = val.get('month')
+                d = val.get('day')
+                
+                score = 0
+                if y: score += 1
+                if m: score += 1
+                if d: score += 1
+                
+                fmt = ""
+                if y and m and d:
+                    fmt = f"{y}-{m:02d}-{d:02d}"
+                elif y and m:
+                    fmt = f"{y}-{m:02d}"
+                elif y:
+                    fmt = str(y)
+                
+                if fmt:
+                    candidates.append((score, fmt))
+            elif isinstance(val, str) and len(val) >= 4:
+                # If it's a string, we assume it's already formatted or at least has the year
+                score = 1 if len(val) == 4 else (2 if len(val) <= 7 else 3)
+                candidates.append((score, val))
+        
+        if not candidates:
+            return None
+            
+        # Sort by score (desc) to get the most detailed date
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
+
+    @staticmethod
     def format_size(size_bytes: int) -> str:
         """
         Format a size in bytes into a human-readable string (MB, GB, TB).
@@ -645,25 +691,9 @@ class TelegramBot:
             artist = album.get("artist", "Unknown Artist")
             type_tag = TelegramBot._get_album_type_tag(album)
 
-            # Year or Date
-            date_display = str(album.get("year", ""))
-            # Upgrade to ReleaseDate if available
-            if "releaseDate" in album:
-                rd = album["releaseDate"]
-                if isinstance(rd, dict):
-                    # Format dict {'year': 2021, 'month': 2, 'day': 23}
-                    y = rd.get('year', '????')
-                    m = rd.get('month')
-                    d = rd.get('day')
-                    
-                    if m and d:
-                        date_display = f"{y}-{m:02d}-{d:02d}"
-                    elif m:
-                        date_display = f"{y}-{m:02d}"
-                    else:
-                        date_display = str(y)
-                elif len(str(rd)) >= 4:
-                     date_display = str(rd)
+            # Year or Date - prioritize more detailed info from originalReleaseDate or releaseDate
+            best_date = TelegramBot._extract_best_date(album)
+            date_display = best_date if best_date else str(album.get("year", ""))
 
             # Tags (Genres)
             genre_str = ""
