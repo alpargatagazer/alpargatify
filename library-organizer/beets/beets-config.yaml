@@ -120,6 +120,46 @@ item_fields:
         
     return f"{albumartist} [{latin}]"
 
+album_fields:
+  formatted_albumartist: |
+    import unicodedata
+
+    def needs_transliteration(s):
+        for char in s:
+            if unicodedata.category(char).startswith('L'): # It's a letter
+                try:
+                    name = unicodedata.name(char)
+                    if "LATIN" not in name:
+                        return True
+                except ValueError:
+                    continue
+        return False
+
+    def clean(s):
+        if not s:
+            return ""
+        normalized = unicodedata.normalize('NFD', s)
+        cleaned = "".join(c for c in normalized if unicodedata.category(c) != 'Mn')
+        for char in " []()-._,_":
+            cleaned = cleaned.replace(char, "")
+        return cleaned.lower()
+
+    if not needs_transliteration(albumartist):
+        return albumartist
+
+    latin = albumartist_sort
+    if "," in latin:
+        parts = latin.split(", ")
+        if len(parts) == 2:
+            latin = f"{parts[1]} {parts[0]}"
+    
+    cl = clean(latin)
+    ca = clean(albumartist)
+    if cl == ca or cl in ca or ca in cl or sorted(list(cl)) == sorted(list(ca)):
+        return albumartist
+        
+    return f"{albumartist} [{latin}]"
+
 
 # ----------------------------------------------------------------------------
 # ALBUM TYPES
