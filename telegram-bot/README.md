@@ -11,10 +11,12 @@ Automatic daily updates about your music library:
 
 ### Interactive Commands
 Chat with your bot to explore your library:
-- `/search <query>` - Search for albums by artist or title (up to 50 results)
+- `/search <query>` - Search for albums by artist or title. If query empty, asks for input.
+- `/year <year>` - Discover albums from a specific year or decade (e.g. `/year 1994` or `/year 90s`)
+- `/recent` - Show the 10 most recently added albums
 - `/random` - Get a random album suggestion with cover art
-- `/nowplaying` - Real-time playback for the authenticated bot user (Subsonic API limitation)
-- `/genres` - Browse genres and get 50 random albums
+- `/nowplaying` - Real-time playback for the authenticated bot user
+- `/genres` - Browse genres and get random albums
 - `/stats` - View library statistics (albums, artists, songs)
 - `/help` - Display available commands
 
@@ -25,7 +27,7 @@ Chat with your bot to explore your library:
 - **Folder Filtering**: Automatically detects your "Music Library" to filter suggestions.
 - **Rich Formatting**: Beautiful messages with emojis, years, and multiple genres
 - **Cover Art**: Album covers sent with random suggestions
-- **Alpine-Based**: Optimized Docker image (~105MB) using multi-stage builds
+- **Debian-Based**: Optimized Docker image using multi-stage builds
 - **Concurrent Architecture**: Runs scheduled jobs and interactive polling simultaneously using a unified bot instance
 
 ## 📋 Setup & Deployment
@@ -80,6 +82,8 @@ To improve user experience, you can register the commands with [@BotFather](http
 ```text
 help - Show bot help
 stats - Navidrome stats
+year - Discover albums by year
+recent - Show recently added albums
 random - Send a random album from Navidrome
 search - Search albums by artist or name
 nowplaying - What are users listening to right now?

@@ -1,5 +1,7 @@
+import datetime
 import logging
 import math
+import re
 import time
 from functools import wraps
 from typing import Optional, List, Dict
@@ -115,7 +117,9 @@ class TelegramBot:
                 "👋 *Hello! I am the Navidrome Bot.*\n\n"
                 "Available commands:\n"
                 "• /search <text> - Search for an artist or album\n"
+                "• /year <year> - Discover albums from a specific year or decade\n"
                 "• /random - Suggest a random album\n"
+                "• /recent - Show recently added albums\n"
                 "• /nowplaying - Show who is listening to what\n"
                 "• /genres - Browse albums by genre\n"
                 "• /stats - Show server statistics\n"
@@ -245,69 +249,27 @@ class TelegramBot:
             query = query.strip()
             
             if not query:
+                # ForceReply flow
+                force_reply = telebot.types.ForceReply(selective=True)
                 self.bot.reply_to(
                     message, 
-                    "Please provide a search term. Example: `/search Radiohead`", 
-                    parse_mode="Markdown"
+                    "🔎 What do you want to search for?", 
+                    reply_markup=force_reply
                 )
                 return
             
-            logger.info(f"User {message.from_user.username} searching for: {query}")
-            
-            try:
-                self.bot.reply_to(message, f"🔎 Searching for '{query}'...")
-                results = self.navidrome.search_albums(query, limit=50)
-                
-                if not results:
-                    self.send_message(message.chat.id, f"❌ No albums found matching '{query}'.")
-                    return
-                
-                msg_lines = [f"🔎 <b>Results for '{query}':</b>\n"]
-                
-                # Fetch full library once for enrichment lookups
-                all_albums = self.navidrome.sync_library(force=False)
-                
-                for album in results:
-                    name = album.get('name', 'Unknown')
-                    artist = album.get('artist', 'Unknown')
-                    year = album.get('year', '')
-                    album_id = album.get('id')
-                    
-                    # Try to get enriched metadata (releasedTypes, isCompilation) from cache
-                    enriched_album = album
-                    if album_id:
-                        cached = next((a for a in all_albums if a.get('id') == album_id), None)
-                        if cached:
-                            enriched_album = cached
-                            
-                    type_tag = self._get_album_type_tag(enriched_album)
-                    
-                    # Get genres (check both 'genres' list and 'genre' string)
-                    genre_str = ""
-                    if "genres" in enriched_album and enriched_album["genres"]:
-                        g_list = enriched_album["genres"]
-                        if isinstance(g_list, list):
-                            names = [g.get("name") for g in g_list if isinstance(g, dict) and "name" in g]
-                            if names:
-                                genre_str = ", ".join(names)
-                    
-                    # Fallback to simple 'genre' if empty
-                    if not genre_str:
-                        genre_str = enriched_album.get('genre', '')
-                    
-                    line = f"• {artist} - <b>{name}</b>{type_tag}"
-                    if year:
-                        line += f" 📅 {year}"
-                    if genre_str:
-                        line += f" 🏷 {genre_str}"
-                    
-                    msg_lines.append(line)
-                
-                self.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
-                
-            except Exception as e:
-                logger.error(f"Error searching: {e}", exc_info=True)
-                self.bot.reply_to(message, f"❌ Error searching: {str(e)}")
+            self._perform_search(message, query)
+
+        @self.bot.message_handler(func=lambda m: m.reply_to_message and "what do you want to search for?" in m.reply_to_message.text.lower())
+        @self.authorized_only
+        def handle_search_reply(message: Message):
+            """
+            Handle the reply to the ForceReply search prompt.
+            """
+            query = message.text.strip()
+            if query:
+                self._perform_search(message, query)
+
 
         @self.bot.message_handler(commands=['nowplaying'])
         @self.authorized_only
@@ -392,30 +354,76 @@ class TelegramBot:
             markup.add(*buttons)
             self.bot.send_message(message.chat.id, "🎷 Select a genre to explore:", reply_markup=markup)
 
-        @self.bot.callback_query_handler(func=lambda call: call.data.startswith('genre:'))
+    
+        @self.bot.message_handler(commands=['year'])
+        @self.authorized_only
+        def filter_by_year(message: Message):
+            """
+            Handle /year command.
+            Usage:
+            - /year 1994 -> Albums from 1994
+            - /year 90s -> Albums from 1990-1999
+            - /year -> Show buttons for decades
+            """
+            # Extract argument
+            arg = message.text.replace("/year", "").strip()
+            
+            if not arg:
+                # Show decades menu
+                from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+                markup = InlineKeyboardMarkup(row_width=3)
+                
+                buttons = []
+                decades = ["50s", "60s", "70s", "80s", "90s", "00s", "10s", "20s"]
+                for d in decades:
+                    buttons.append(InlineKeyboardButton(d, callback_data=f"year:{d}"))
+                
+                # Add current year
+                current_year = datetime.datetime.now().year
+                buttons.append(InlineKeyboardButton(f"Current ({current_year})", callback_data=f"year:{current_year}"))
+                
+                markup.add(*buttons)
+                self.bot.send_message(message.chat.id, "📅 Select a decade or year:", reply_markup=markup)
+                return
+
+            self._process_year_request(message.chat.id, arg)
+
+
+        @self.bot.message_handler(commands=['recent'])
+        @self.authorized_only
+        def get_recent_albums(message: Message):
+            """
+            Handle /recent command to show newly added albums.
+            """
+            logger.info(f"User {message.from_user.username} requested recent albums")
+            try:
+                # get_new_albums usually defaults to 24h, allows override
+                # We want the absolute latest 10, regardless of specific time window? 
+                # The generic method might filter by "N hours". 
+                # Let's use a large window (e.g. 30 days) ensuring we get at least some content, 
+                # then slice the top 10.
+                
+                recent = self.navidrome.get_new_albums(hours=24 * 30, force=False)
+                
+                if not recent:
+                    self.bot.reply_to(message, "📭 No albums added in the last 30 days.")
+                    return
+                
+                # Sort by 'created' DESC is already done in get_new_albums
+                top_10 = recent[:10]
+                
+                msg = self.format_album_list(top_10, "🆕 <b>Recently Added Albums:</b>")
+                self.send_message(message.chat.id, msg)
+
+            except Exception as e:
+                logger.error(f"Error fetching recent: {e}", exc_info=True)
+                self.bot.reply_to(message, f"❌ Error: {str(e)}")
+
+        @self.bot.callback_query_handler(func=lambda call: call.data.startswith('genre:') or call.data.startswith('year:'))
         def handle_callback(call):
             """
-            Handle all inline keyboard callback queries (genre selection).
-            
-            :param call: Telegram callback query object.
+            Handle all inline keyboard callback queries (genre and year selection).
             """
-            # Preservation of top callback logic (Disabled: Navidrome doesn't support global stats)
-            # if call.data.startswith('top:'):
-            #     days = int(call.data.split(':')[1])
-            #     self.bot.answer_callback_query(call.id, f"Calculating top for {days} days...")
-            #     albums = self.navidrome.get_top_albums_from_history(days=days, limit=10)
-            #     
-            #     if not albums:
-            #         self.bot.edit_message_text(f"📉 No playback data found for the last {days} days.", 
-            #                                   call.message.chat.id, call.message.message_id)
-            #         return
-            #
-            #     msg = f"🏆 <b>Top 10 Albums ({days} days):</b>\n\n"
-            #     for i, alb in enumerate(albums, 1):
-            #         msg += f"{i}. <b>{alb.get('name')}</b> - {alb.get('artist')} ({alb.get('playCount')} plays)\n"
-            #     
-            #     self.bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, parse_mode="HTML")
-
             if call.data.startswith('genre:'):
                 genre = call.data.split(':')[1]
                 self.bot.answer_callback_query(call.id, f"Searching for {genre} albums...")
@@ -435,7 +443,143 @@ class TelegramBot:
                 if msg:
                     self.bot.delete_message(call.message.chat.id, call.message.message_id)
                     self.send_message(call.message.chat.id, msg)
+            
+            elif call.data.startswith('year:'):
+                arg = call.data.split(':')[1]
+                self.bot.answer_callback_query(call.id, f"Selecting {arg}...")
+                
+                # Delete the menu message
+                self.bot.delete_message(call.message.chat.id, call.message.message_id)
+                self._process_year_request(call.message.chat.id, arg)
     
+    def _perform_search(self, message: Message, query: str):
+        """
+        Execute the search logic (common for /search command and ForceReply).
+        """
+        logger.info(f"User {message.from_user.username} searching for: {query}")
+        
+        try:
+            self.bot.reply_to(message, f"🔎 Searching for '{query}'...")
+            results = self.navidrome.search_albums(query, limit=50)
+            
+            if not results:
+                self.send_message(message.chat.id, f"❌ No albums found matching '{query}'.")
+                return
+            
+            msg_lines = [f"🔎 <b>Results for '{query}':</b>\n"]
+            
+            # Fetch full library once for enrichment lookups
+            all_albums = self.navidrome.sync_library(force=False)
+            
+            for album in results:
+                name = album.get('name', 'Unknown')
+                artist = album.get('artist', 'Unknown')
+                year = album.get('year', '')
+                album_id = album.get('id')
+                
+                # Try to get enriched metadata (releasedTypes, isCompilation) from cache
+                enriched_album = album
+                if album_id:
+                    cached = next((a for a in all_albums if a.get('id') == album_id), None)
+                    if cached:
+                        enriched_album = cached
+                        
+                type_tag = self._get_album_type_tag(enriched_album)
+                
+                # Get genres (check both 'genres' list and 'genre' string)
+                genre_str = ""
+                if "genres" in enriched_album and enriched_album["genres"]:
+                    g_list = enriched_album["genres"]
+                    if isinstance(g_list, list):
+                        names = [g.get("name") for g in g_list if isinstance(g, dict) and "name" in g]
+                        if names:
+                            genre_str = ", ".join(names)
+                
+                # Fallback to simple 'genre' if empty
+                if not genre_str:
+                    genre_str = enriched_album.get('genre', '')
+                
+                line = f"• {artist} - <b>{name}</b>{type_tag}"
+                if year:
+                    line += f" 📅 {year}"
+                if genre_str:
+                    line += f" 🏷 {genre_str}"
+                
+                msg_lines.append(line)
+            
+            self.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
+            
+        except Exception as e:
+            logger.error(f"Error searching: {e}", exc_info=True)
+            self.bot.reply_to(message, f"❌ Error searching: {str(e)}")
+
+    def _process_year_request(self, chat_id: int, arg: str):
+        """
+        Process the logic for fetching albums by year/decade string.
+        """
+        import re
+        import datetime
+        
+        # Validate argument
+        # Patterns: "1994", "2023", "90s", "80s", "current"
+        
+        start_year = 0
+        end_year = 0
+        display_str = arg
+        
+        current_year = datetime.datetime.now().year
+        
+        if arg.lower() == "current":
+            start_year = end_year = current_year
+            display_str = str(current_year)
+            
+        elif re.match(r'^\d{4}$', arg):
+            y = int(arg)
+            if 1950 <= y <= current_year + 1:
+                start_year = end_year = y
+            else:
+                self.send_message(chat_id, "❌ Please provide a valid year between 1950 and now.")
+                return
+                
+        elif re.match(r'^\d0s$', arg):
+            # Decade: 90s, 80s, 00s, 10s
+            decade_prefix = int(arg[:2])
+            
+            # Handle 2-digit century mapping
+            # 50s-90s -> 1950-1999
+            # 00s-20s -> 2000-2029
+            if 50 <= decade_prefix <= 99:
+                base = 1900 + decade_prefix
+            elif 0 <= decade_prefix <= 40: # ample buffer for future 30s, 40s
+                base = 2000 + decade_prefix
+            else:
+                self.send_message(chat_id, "❌ Invalid decade.")
+                return
+                
+            start_year = base
+            end_year = base + 9
+            display_str = f"the {arg}"
+            
+        else:
+             self.send_message(chat_id, "❌ Invalid format. Use `/year 1994` or `/year 90s`.")
+             return
+
+        try:
+            self.send_message(chat_id, f"📅 Finding albums from {display_str}...")
+            albums = self.navidrome.get_albums_by_year(start_year, end_year, limit=50)
+            
+            if not albums:
+                self.send_message(chat_id, f"❌ No albums found for {display_str}.")
+                return
+
+            msg = self.format_album_list(albums, f"📅 Random albums from <b>{display_str}</b>:")
+            if msg:
+                self.send_message(chat_id, msg)
+                
+        except Exception as e:
+            logger.error(f"Error fetching year albums: {e}", exc_info=True)
+            self.send_message(chat_id, f"❌ Error: {str(e)}")
+
     def start_polling(self) -> None:
         """
         Start the bot polling loop with a custom resilient mechanism.
