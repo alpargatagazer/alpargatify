@@ -368,6 +368,13 @@ class TelegramBot:
             # Extract argument
             arg = message.text.replace("/year", "").strip()
             
+            # Remove bot mention if present (e.g., @alpargatibot)
+            if arg.startswith('@'):
+                parts = arg.split(maxsplit=1)
+                arg = parts[1] if len(parts) > 1 else ""
+            
+            arg = arg.strip()
+            
             if not arg:
                 # Show decades menu
                 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -566,7 +573,7 @@ class TelegramBot:
 
         try:
             self.send_message(chat_id, f"📅 Finding albums from {display_str}...")
-            albums = self.navidrome.get_albums_by_year(start_year, end_year, limit=50)
+            albums = self.navidrome.get_albums_by_year(start_year, end_year, limit=40)
             
             if not albums:
                 self.send_message(chat_id, f"❌ No albums found for {display_str}.")

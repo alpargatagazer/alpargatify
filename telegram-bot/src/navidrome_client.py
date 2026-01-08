@@ -691,8 +691,31 @@ class NavidromeClient:
         random.shuffle(matches)
         selected = matches[:limit]
         
-        # Sort by year (ascending)
-        selected.sort(key=lambda x: int(x.get('year', 0)))
+        # Sort by full release date (ascending)
+        def _get_sortable_date(alb):
+            # precise date > year > 0
+            # Try ISO strings
+            for key in ['originalReleaseDate', 'releaseDate']:
+                val = alb.get(key)
+                if val:
+                    if isinstance(val, dict):
+                        y = val.get('year', 0)
+                        m = val.get('month', 0)
+                        d = val.get('day', 0)
+                        return f"{y:04d}-{m:02d}-{d:02d}"
+                    elif isinstance(val, str) and len(val) >= 4:
+                        return val
+
+            # Fallback to simple year
+            y = alb.get('year')
+            if y:
+                try:
+                    return f"{int(y):04d}"
+                except:
+                    pass
+            return "0000"
+
+        selected.sort(key=_get_sortable_date)
         
         return selected
 
