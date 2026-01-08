@@ -37,7 +37,7 @@ FORMAT="opus"         # Default format: opus
 BITRATE="256"         # Default bitrate: 256kbps
 
 # Default encoding parameters
-DEFAULT_OPUS_ARGS=( --bitrate "${BITRATE}" --vbr )
+DEFAULT_OPUS_ARGS=( --bitrate "${BITRATE}" --vbr --music )
 # Default afconvert arguments: m4af container, AAC codec, bitrate, quality 127 and VBR_constrained
 DEFAULT_AAC_ARGS=( -f m4af -d "aac" -b 256000 -q 127 -s 2 )
 

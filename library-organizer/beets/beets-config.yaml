@@ -60,6 +60,7 @@ plugins:
   - fetchart      # Download album cover art
   - embedart      # Embed cover art in audio files
   - lyrics        # Fetch song lyrics
+  - info          # Display file metadata
 
 # ----------------------------------------------------------------------------
 # CUSTOM FIELDS
@@ -118,6 +119,7 @@ item_fields:
         return albumartist
         
     return f"{albumartist} [{latin}]"
+
 
 # ----------------------------------------------------------------------------
 # ALBUM TYPES
