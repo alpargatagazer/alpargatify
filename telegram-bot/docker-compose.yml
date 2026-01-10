@@ -13,12 +13,24 @@ services:
       - NAVIDROME_MUSIC_FOLDER=Music Library
     volumes:
       - ./data:/app/data
+    depends_on:
+      init-chown:
+        condition: service_completed_successfully
     secrets:
       - navidrome_url
       - navidrome_user
       - navidrome_password
       - telegram_bot_token
       - telegram_chat_id
+
+  init-chown:
+    image: alpine:latest
+    container_name: navidrome_telegram_bot_init
+    command: >
+      sh -c "chown -R ${UID:-1000}:${GID:-1000} /data"
+    volumes:
+      - ./data:/data
+    restart: "no"
 
 secrets:
   navidrome_url:
