@@ -42,5 +42,5 @@ Enabled = true
 Enabled = true
 ScanOnStartup = true
 PurgeMissing = "always" # Remove missing files on every scan
-Schedule = "0 * * * *"  # Every hour
+Schedule = "0 3 * * *"  # Every day at 3AM
 WatcherWait = "1m"
