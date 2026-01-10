@@ -656,6 +656,70 @@ class NavidromeClient:
                 return albums[:limit]
         return []
 
+    def get_albums_by_year(self, start_year: int, end_year: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Retrieve random albums released within a specific year range.
+        
+        :param start_year: The starting year (inclusive).
+        :param end_year: The ending year (inclusive).
+        :param limit: Maximum number of albums to return.
+        :return: List of album dictionaries sorted by year.
+        """
+        # Since Navidrome/Subsonic API doesn't support range filtering easily,
+        # we sync the library (cached) and filter locally.
+        all_albums = self.sync_library(force=False)
+        
+        matches = []
+        for album in all_albums:
+            # Check 'year' field
+            year_val = album.get('year')
+            if not year_val:
+                # Try detailed Release Date if accessible, but usually 'year' is present in standard list
+                continue
+                
+            try:
+                year = int(year_val)
+                if start_year <= year <= end_year:
+                    matches.append(album)
+            except (ValueError, TypeError):
+                continue
+        
+        if not matches:
+            return []
+            
+        # Shuffle first to get random selection, then sort by year
+        random.shuffle(matches)
+        selected = matches[:limit]
+        
+        # Sort by full release date (ascending)
+        def _get_sortable_date(alb):
+            # precise date > year > 0
+            # Try ISO strings
+            for key in ['originalReleaseDate', 'releaseDate']:
+                val = alb.get(key)
+                if val:
+                    if isinstance(val, dict):
+                        y = val.get('year', 0)
+                        m = val.get('month', 0)
+                        d = val.get('day', 0)
+                        return f"{y:04d}-{m:02d}-{d:02d}"
+                    elif isinstance(val, str) and len(val) >= 4:
+                        return val
+
+            # Fallback to simple year
+            y = alb.get('year')
+            if y:
+                try:
+                    return f"{int(y):04d}"
+                except:
+                    pass
+            return "0000"
+
+        selected.sort(key=_get_sortable_date)
+        
+        return selected
+
+
     def get_server_stats(self) -> Optional[Dict[str, int]]:
         """
         Get server statistics (album count, artist count, song count).

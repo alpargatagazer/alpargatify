@@ -63,7 +63,8 @@ services:
       TAKE_CONFIG_OWNERSHIP: 1
     volumes:
       - "${VOLUMES_PATH}/picard:/config"
-      - "${NAVIDROME_MUSIC_PATH}:/storage:rw"
+      - "${NAVIDROME_MUSIC_PATH}:/storage/music:rw"
+      - "${NAVIDROME_EXTRA_LIBRARIES_PATH}:/storage/extra-libraries:rw"
     networks:
       - frontend
     restart: unless-stopped

@@ -3,7 +3,7 @@ services:
   grafana:
     image: grafana/grafana:main
     user: ${PUID}:${PGID}
-    profiles: ["monitoring"]
+    profiles: [ "monitoring" ]
     container_name: grafana
     labels:
       - 'wud.tag.include=main'
@@ -23,15 +23,15 @@ services:
       - monitoring
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "curl --fail -sS http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      test: [ "CMD", "sh", "-c", "curl --fail -sS http://127.0.0.1:3000/api/health >/dev/null || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 3
 
   prometheus:
-    image: prom/prometheus:v3.8.1
+    image: prom/prometheus:v3.9.1
     user: ${PUID}:${PGID}
-    profiles: ["monitoring"]
+    profiles: [ "monitoring" ]
     container_name: prometheus
     labels:
       - 'wud.tag.include=^v\d+\.\d+\.\d+$$'
@@ -55,14 +55,14 @@ services:
       - caddy-with-admin
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget -q -O /dev/null http://127.0.0.1:9090/-/healthy || exit 1"]
+      test: [ "CMD", "sh", "-c", "wget -q -O /dev/null http://127.0.0.1:9090/-/healthy || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 3
 
   node-exporter:
     image: prom/node-exporter:v1.10.2
-    profiles: ["monitoring"]
+    profiles: [ "monitoring" ]
     container_name: node-exporter
     labels:
       - 'wud.tag.include=^v\d+\.\d+\.\d+$$'

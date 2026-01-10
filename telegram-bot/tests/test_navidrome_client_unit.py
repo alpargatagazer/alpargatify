@@ -147,5 +147,25 @@ class TestNavidromeClientUnit(unittest.TestCase):
         album = self.client._fetch_album_details('alb1')
         self.assertEqual(album['total_size_bytes'], 300)
 
+    @patch('navidrome_client.NavidromeClient.sync_library')
+    def test_get_albums_by_year(self, mock_sync):
+        mock_sync.return_value = [
+            {'id': '1', 'name': 'A', 'year': 1990},
+            {'id': '2', 'name': 'B', 'year': 1994},
+            {'id': '3', 'name': 'C', 'year': 1999},
+            {'id': '4', 'name': 'D', 'year': 2000},
+            {'id': '5', 'name': 'E', 'year': '1995'} # String year
+        ]
+        
+        # Test range 1990-1995
+        results = self.client.get_albums_by_year(1990, 1995)
+        self.assertEqual(len(results), 3) # A, B, E
+        
+        # Test sorting (A=1990, B=1994, E=1995)
+        self.assertEqual(results[0]['id'], '1')
+        self.assertEqual(results[1]['id'], '2')
+        self.assertEqual(results[2]['id'], '5')
+
+
 if __name__ == '__main__':
     unittest.main()

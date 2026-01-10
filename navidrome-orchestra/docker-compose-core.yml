@@ -66,5 +66,12 @@ services:
 networks:
   internal:
   frontend:
+    # Best when working in virtualized environments 
+    driver_opts:
+      com.docker.network.driver.mtu: 1450
   monitoring:
+    driver_opts:
+      com.docker.network.driver.mtu: 1450
   caddy-with-admin:
+    driver_opts:
+      com.docker.network.driver.mtu: 1450

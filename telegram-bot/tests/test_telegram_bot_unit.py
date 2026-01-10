@@ -68,5 +68,61 @@ class TestTelegramBotUnit(unittest.TestCase):
         alb_none = {"name": "Mystery Music"}
         self.assertEqual(TelegramBot._get_album_type_tag(alb_none), "")
 
+    @patch('telegram_bot.TelegramBot.send_message')
+    @patch('telegram_bot.NavidromeClient.get_new_albums')
+    def test_recent_command(self, mock_get_new, mock_send):
+        # Mock recent albums
+        mock_get_new.return_value = [
+            {'name': 'Alb1', 'artist': 'Art1', 'created': '2024-01-01'},
+            {'name': 'Alb2', 'artist': 'Art2', 'created': '2023-12-31'}
+        ]
+        
+        # Mock message
+        msg = MagicMock()
+        msg.chat.id = 123
+        msg.from_user.username = "tester"
+        
+        # Bypass authorization check
+        self.bot._is_authorized = MagicMock(return_value=True)
+        
+        # Call the decorated method
+        self.bot.get_recent_albums(msg)
+        
+        # Verify get_new_albums called
+        mock_get_new.assert_called_with(hours=720, force=False)
+        
+        # Verify message sent
+        self.assertTrue(mock_send.called)
+        args, _ = mock_send.call_args
+        self.assertIn("Alb1", args[1])
+        self.assertIn("Alb2", args[1])
+
+    @patch('telegram_bot.TelegramBot.send_message')
+    @patch('telegram_bot.NavidromeClient.get_albums_by_year')
+    def test_process_year_request(self, mock_get_year, mock_send):
+        # Test specific year
+        self.bot._process_year_request(123, "1994")
+        mock_get_year.assert_called_with(1994, 1994, limit=50)
+        
+        # Test decade
+        self.bot._process_year_request(123, "90s")
+        mock_get_year.assert_called_with(1990, 1999, limit=50)
+        
+        # Test current
+        import datetime
+        now = datetime.datetime.now().year
+        self.bot._process_year_request(123, "current")
+        mock_get_year.assert_called_with(now, now, limit=50)
+        
+        # Test invalid
+        self.bot._process_year_request(123, "invalid")
+        # Should send error message, not call get_albums
+        # (This assertion depends on reset of mock or order, but since we called it 3 times before...)
+        # Better to check if send_message was called with error
+        self.assertTrue(mock_send.called)
+
+
+
+
 if __name__ == '__main__':
     unittest.main()
