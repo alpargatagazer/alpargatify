@@ -31,6 +31,9 @@ SKIP_EXISTING="yes"   # Skip conversion if output file exists
 VERBOSE="no"          # Enable verbose debug output
 DRY_RUN="no"          # Show actions without executing them
 SPLIT_ONLY="no"       # Only split FLAC images, don't convert
+COPY_COVERS="yes"     # Copy cover art images by default
+STRIP_REPLAYGAIN="yes" # Strip ReplayGain tags before conversion
+METAFLAC_PRESENT="no" # Flag indicating if metaflac is available
 
 # Default settings
 FORMAT="opus"         # Default format: opus
@@ -115,6 +118,8 @@ Flags:
   --split-only    only split FLAC images using CUE sheets, output FLAC tracks
                   (no conversion). Tracks are placed in destination with
                   same structure as if they were converted.
+  --no-cover      do not copy cover art images (cover.jpg, front.png, etc.)
+  --keep-replaygain  do not strip ReplayGain tags before conversion
 
 Environment:
   ENCODE_OPTS     optional extra encoding options (whitespace-separated tokens)
@@ -124,6 +129,8 @@ Environment:
   VERBOSE         ${VERBOSE}
   DRY_RUN         ${DRY_RUN}
   SPLIT_ONLY      ${SPLIT_ONLY}
+  COPY_COVERS     ${COPY_COVERS}
+  STRIP_REPLAYGAIN ${STRIP_REPLAYGAIN}
 
 Default encoding (for Opus):
   opusenc ${DEFAULT_OPUS_ARGS[*]}
@@ -149,6 +156,8 @@ parse_arguments() {
       --force) FORCE_FROM_CLI="yes"; shift ;;
       --dry-run) DRY_RUN="yes"; shift ;;
       --split-only) SPLIT_ONLY="yes"; shift ;;
+      --no-cover) COPY_COVERS="no"; shift ;;
+      --keep-replaygain) STRIP_REPLAYGAIN="no"; shift ;;
       --) shift; break ;;
       -*)
         err "Unknown option: $1"
@@ -178,6 +187,8 @@ parse_arguments() {
   DRY_RUN="$(normalize_bool "$DRY_RUN")"
   VERBOSE="$(normalize_bool "$VERBOSE")"
   SPLIT_ONLY="$(normalize_bool "$SPLIT_ONLY")"
+  COPY_COVERS="$(normalize_bool "$COPY_COVERS")"
+  STRIP_REPLAYGAIN="$(normalize_bool "$STRIP_REPLAYGAIN")"
   
   # Normalize format
   case "$(echo "$FORMAT" | tr '[:upper:]' '[:lower:]')" in
@@ -225,6 +236,16 @@ check_optional_tools() {
     
     if [ -n "$MISSING_META_TOOLS" ]; then
       warn "metadata copying will be limited because tools are missing:$MISSING_META_TOOLS"
+    fi
+  fi
+
+  METAFLAC_PRESENT="no"
+  if command -v metaflac >/dev/null 2>&1; then
+    METAFLAC_PRESENT="yes"
+  else
+    if [ "$STRIP_REPLAYGAIN" = "yes" ]; then
+      warn "metaflac not found. ReplayGain stripping will be skipped."
+      STRIP_REPLAYGAIN="no"
     fi
   fi
 
@@ -280,6 +301,8 @@ print_settings() {
   info "  Format:        $FORMAT"
   info "  Bitrate:       $BITRATE kbps"
   info "  Mode:          $([ "$SPLIT_ONLY" = "yes" ] && echo "SPLIT ONLY (FLAC)" || echo "Convert to $FORMAT")"
+  info "  Copy Covers:   $COPY_COVERS"
+  info "  Strip RG:      $STRIP_REPLAYGAIN"
   info "  SKIP_EXISTING: $SKIP_EXISTING"
   info "  DRY_RUN:       $DRY_RUN"
   info "  VERBOSE:       $VERBOSE"
@@ -322,7 +345,7 @@ apply_metadata_to_m4a() {
         ALBUMARTIST) ap_args+=( --albumArtist "$val" ) ;;
         COMPOSER) ap_args+=( --composer "$val" ) ;;
         GENRE) ap_args+=( --genre "$val" ) ;;
-        COMMENT) ap_args+=( --comment "$val" ) ;;
+        #COMMENT) ap_args+=( --comment "$val" ) ;;
         LYRICS) ap_args+=( --lyrics "$val" ) ;;
         COPYRIGHT) ap_args+=( --copyright "$val" ) ;;
         ENCODEDBY) ap_args+=( --encodedBy "$val" ) ;;
@@ -379,6 +402,51 @@ apply_metadata_to_m4a() {
 }
 
 ###############################################################################
+# ReplayGain stripping
+###############################################################################
+
+# Strip ReplayGain tags from a FLAC file by creating a temporary copy
+# Returns the path to the cleaned temp file, or the original file if stripping is disabled/failed
+strip_replaygain_to_temp() {
+  local in_file="$1"
+  
+  if [ "$STRIP_REPLAYGAIN" != "yes" ] || [ "$METAFLAC_PRESENT" != "yes" ]; then
+    echo "$in_file"
+    return 0
+  fi
+
+  # Create temp file
+  local tmp_file
+  tmp_file="$(mktemp -t flac_norga_XXXXXX.flac 2>/dev/null || mktemp /tmp/flac_norga_XXXXXX.flac 2>/dev/null || true)"
+  
+  if [ -z "$tmp_file" ]; then
+    warn "Could not create temp file for ReplayGain stripping, using original"
+    echo "$in_file"
+    return 0
+  fi
+
+  # Copy the file
+  cp "$in_file" "$tmp_file" 2>/dev/null || {
+    warn "Could not copy file for ReplayGain stripping, using original"
+    rm -f "$tmp_file" 2>/dev/null || true
+    echo "$in_file"
+    return 0
+  }
+
+  # Strip ReplayGain tags
+  if metaflac --remove-replay-gain "$tmp_file" 2>/dev/null; then
+    debug "Stripped ReplayGain from temp copy: $tmp_file"
+    echo "$tmp_file"
+    return 0
+  else
+    debug "No ReplayGain tags found or stripping failed, using original"
+    rm -f "$tmp_file" 2>/dev/null || true
+    echo "$in_file"
+    return 0
+  fi
+}
+
+###############################################################################
 # Core conversion functions
 ###############################################################################
 
@@ -401,17 +469,30 @@ convert_to_lossy() {
 
   info "Converting: ${in_file#$SRC/} -> ${out_file#$DEST/}"
   
+  # Strip ReplayGain if enabled (creates temp file)
+  local encode_src="$in_file"
+  local temp_stripped=""
+  if [ "$STRIP_REPLAYGAIN" = "yes" ] && [ "$DRY_RUN" != "yes" ]; then
+    encode_src="$(strip_replaygain_to_temp "$in_file")"
+    if [ "$encode_src" != "$in_file" ]; then
+      temp_stripped="$encode_src"
+      debug "Using stripped temp file: $temp_stripped"
+    fi
+  elif [ "$STRIP_REPLAYGAIN" = "yes" ] && [ "$DRY_RUN" = "yes" ]; then
+    info "  -> (would strip ReplayGain tags before encoding)"
+  fi
+  
   local cmd=()
   if [ "$FORMAT" = "opus" ]; then
     if command -v opusenc >/dev/null 2>&1; then
-      cmd=(opusenc "${ENCODE_ARGS[@]}" "$in_file" "$out_file")
+      cmd=(opusenc "${ENCODE_ARGS[@]}" "$encode_src" "$out_file")
     else
       # Fallback to ffmpeg
-      cmd=(ffmpeg -i "$in_file" -c:a libopus -b:a "${BITRATE}k" "$out_file")
+      cmd=(ffmpeg -i "$encode_src" -c:a libopus -b:a "${BITRATE}k" "$out_file")
     fi
   else
     # AAC
-    cmd=(afconvert "${ENCODE_ARGS[@]}" "$in_file" "$out_file")
+    cmd=(afconvert "${ENCODE_ARGS[@]}" "$encode_src" "$out_file")
   fi
 
   if [ "$DRY_RUN" = "yes" ]; then
@@ -420,17 +501,24 @@ convert_to_lossy() {
   fi
 
   debug "Running: ${cmd[*]}"
+  local convert_result=0
   if "${cmd[@]}" >/dev/null 2>&1; then
     if [ "$FORMAT" = "aac" ]; then
       apply_metadata_to_m4a "$in_file" "$out_file"
     fi
     info "  -> OK"
-    return 0
   else
     err "  -> ERROR converting $in_file"
     [ -e "$out_file" ] && rm -f "$out_file"
-    return 1
+    convert_result=1
   fi
+
+  # Cleanup temp file if we created one
+  if [ -n "$temp_stripped" ] && [ -f "$temp_stripped" ]; then
+    rm -f "$temp_stripped" 2>/dev/null || true
+  fi
+
+  return $convert_result
 }
 
 copy_flac_file() {
@@ -450,6 +538,41 @@ copy_flac_file() {
   fi
 
   cp "$in_file" "$out_file" || return 1
+}
+
+copy_cover_art() {
+  local src_dir="$1"
+  local dest_dir="$2"
+
+  if [ "$COPY_COVERS" != "yes" ]; then
+    return 0
+  fi
+
+  # Priority list for cover art
+  local candidates=("cover.jpg" "cover.png" "front.jpg" "front.png" "folder.jpg" "folder.png" "Cover.jpg" "Cover.png")
+
+  for cand in "${candidates[@]}"; do
+    local src_img="$src_dir/$cand"
+    if [ -f "$src_img" ]; then
+      local dest_img="$dest_dir/$cand"
+      
+      # If file exists in destination, skip (unless FORCE is implicitly handled by rm, 
+      # but standard logic is SKIP_EXISTING. We can check SKIP_EXISTING here)
+      if [ -e "$dest_img" ] && [ "$SKIP_EXISTING" = "yes" ]; then
+        # Already exists, assume it's good
+        return 0
+      fi
+
+      info "Copying cover: $cand"
+      if [ "$DRY_RUN" = "yes" ]; then
+        printf '  -> DRY RUN: cp %q %q\n' "$src_img" "$dest_img"
+        return 0
+      fi
+
+      cp "$src_img" "$dest_img" || warn "Failed to copy cover art: $cand"
+      return 0
+    fi
+  done
 }
 
 ###############################################################################
@@ -519,6 +642,9 @@ process_flac_file() {
   if [ -n "$cue_file" ]; then
     if split_with_xld "$srcfile" "$cue_file" "$destdir" "$relpath"; then return 0; fi
   fi
+
+  # Attempt to copy cover art (will handle duplication checks internally)
+  copy_cover_art "$(dirname "$srcfile")" "$destdir"
 
   if [ "$SPLIT_ONLY" = "yes" ]; then copy_flac_file "$srcfile" "$destdir"
   else convert_to_lossy "$srcfile" "$destdir"; fi

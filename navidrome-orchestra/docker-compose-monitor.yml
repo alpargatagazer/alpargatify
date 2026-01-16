@@ -40,7 +40,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=5d
+      - --storage.tsdb.retention.time=14d
       - --storage.tsdb.retention.size=10GB
       - --storage.tsdb.min-block-duration=1h
       - --storage.tsdb.max-block-duration=12h

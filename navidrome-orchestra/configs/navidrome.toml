@@ -1,19 +1,20 @@
 # Navidrome Configuration
 # All info: https://www.navidrome.org/docs/usage/configuration-options/#available-options
 
-AutoTranscodeDownload = false               # By default is false but I want to keep it explicit
-DataFolder = "/data"                        # Same as before
+AutoTranscodeDownload = false   # By default is false but I want to keep it explicit
+CoverArtPriority = "embedded, cover.*, folder.*, front.*, external"
+DataFolder = "/data"
 DbPath = "/data/navidrome.db?cache=shared&_busy_timeout=30000&_journal_mode=WAL&_foreign_keys=on&synchronous=normal"    # busy timeout set to 30 seconds instead of 15
 DefaultLanguage = "es"
-DefaultShareExpiration = "48h"              # 2 days
+DefaultShareExpiration = "48h"  # 2 days
 DefaultTheme = "Nord"
 EnableGravatar = true
-EnableInsightsCollector = true              # Default, but keep it true to collect insights
+EnableInsightsCollector = true  # Default, but keep it true to collect insights
 EnableSharing = true
 ImageCacheSize = "2GB"
-LogLevel = "info"                           # Keep it at info
-MusicFolder = "/music"                      # Default music folder
-SessionTimeout = "48h"                      # 48 hours, default
+LogLevel = "info"       # Keep it at info
+MusicFolder = "/music"  # Default music folder
+SessionTimeout = "48h"  # 48 hours, default
 TranscodingCacheSize = "100MB"
 UIWelcomeMessage = "Gracias por estar aquí"
 
