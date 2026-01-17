@@ -12,6 +12,7 @@ services:
       - ./configs/Caddyfile.custom:/etc/caddy/Caddyfile:ro
       - ${VOLUMES_PATH}/caddy/data:/data
       - ${VOLUMES_PATH}/caddy/config:/config
+      - ${VOLUMES_PATH}/caddy/logs:/var/log/caddy
     ports:
       - "80:80"
       - "443:443"

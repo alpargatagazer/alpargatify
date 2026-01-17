@@ -3,6 +3,10 @@ services:
   sftp:
     image: atmoz/sftp:alpine
     container_name: sftp
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "/entrypoint ${SFTP_USER}:${SFTP_PASSWORD}:${PUID}:${PGID} 2>&1 | tee /var/log/sftp/access.log"
     labels:
       - 'wud.tag.include=alpine'
       - 'wud.watch.digest=true'
@@ -12,6 +16,7 @@ services:
       TZ: ${TZ}
     volumes:
       - ${NAVIDROME_MUSIC_PATH}:/home/${SFTP_USER}/music:rw
+      - ${VOLUMES_PATH}/sftp/logs:/var/log/sftp
     ports:
       - "${SFTP_PORT}:22"
     networks:

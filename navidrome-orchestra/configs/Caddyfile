@@ -6,6 +6,15 @@
     metrics {
         per_host
     }
+
+    # JSON logging for Fail2ban integration
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 100mb
+            roll_keep 5
+        }
+        format json
+    }
 }
 
 <protocol>://<domain> {
@@ -17,18 +26,27 @@
 }
 
 <protocol>://wud.<domain> {
+    basicauth {
+        <caddy_auth_user> <caddy_auth_password_hash>
+    }
     route {
         reverse_proxy wud:2999
     }
 }
 
 <protocol>://grafana.<domain> {
+    basicauth {
+        <caddy_auth_user> <caddy_auth_password_hash>
+    }
     route {
         reverse_proxy grafana:3000
     }
 }
 
 <protocol>://syncthing.<domain> {
+    basicauth {
+        <caddy_auth_user> <caddy_auth_password_hash>
+    }
     route {
         reverse_proxy syncthing:8384
     }
