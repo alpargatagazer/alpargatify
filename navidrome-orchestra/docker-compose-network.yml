@@ -24,4 +24,8 @@ services:
         # without exposing it to anyone else
         aliases:
           - caddy-admin
+    command:
+      - sh
+      - -c
+      - "caddy run --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1 | tee /var/log/caddy/access.log"
     restart: unless-stopped

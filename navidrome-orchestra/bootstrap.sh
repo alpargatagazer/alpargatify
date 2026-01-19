@@ -108,6 +108,7 @@ ENABLE_WUD=1
 ENABLE_EXTRA_STORAGE=1
 ENABLE_MONITORING=1
 ENABLE_PICARD=1
+ENABLE_DOZZLE=1
 # - local: default behavior, <protocol>="http"
 # - prod:  production behavior, <protocol>="https"
 PROD_MODE=0   # 0=local, 1=prod
@@ -125,6 +126,7 @@ Profile control (defaults: all enabled):
   --no-extra-storage: disable the "extra-storage" profile
   --no-monitoring   : disable the "monitoring" profile
   --no-picard       : disable the "picard" profile
+  --no-dozzle       : disable the "dozzle" profile
   --prod            : Caddy starts using HTTPS
 
 Examples:
@@ -143,6 +145,7 @@ while (( "$#" )); do
     --no-extra-storage) ENABLE_EXTRA_STORAGE=0; shift ;;
     --no-monitoring) ENABLE_MONITORING=0; shift ;;
     --no-picard) ENABLE_PICARD=0; shift ;;
+    --no-dozzle) ENABLE_DOZZLE=0; shift ;;
     -h|--help) usage; exit 0 ;;
     --) shift; break ;;
     -*) echo "Unknown option: $1" >&2; usage; exit 2 ;;
@@ -648,10 +651,21 @@ if [[ $SUPPORTS_PROFILE -eq 1 ]]; then
   if [[ $ENABLE_PICARD -eq 1 ]]; then
     PROFILE_ARGS+=( --profile picard )
   fi
+  if [[ $ENABLE_DOZZLE -eq 1 ]]; then
+    PROFILE_ARGS+=( --profile dozzle )
+  fi
   if [[ $PROD_MODE -eq 1 ]]; then
     PROFILE_ARGS+=( --profile prod )
   fi
 fi
+
+###############################################################################
+# Unset unused secrets to prevent leaking into the environment
+###############################################################################
+# WUD_ADMIN_PASSWORD uses WUD_ADMIN_PASSWORD_HASH for the container
+unset WUD_ADMIN_PASSWORD
+# CADDY_AUTH_PASSWORD uses CADDY_AUTH_PASSWORD_HASH in Caddyfile
+unset CADDY_AUTH_PASSWORD
 
 ###############################################################################
 # Invoke compose with selected mode using original compose files

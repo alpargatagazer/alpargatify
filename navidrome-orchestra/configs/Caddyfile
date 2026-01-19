@@ -7,12 +7,8 @@
         per_host
     }
 
-    # JSON logging for Fail2ban integration
+    # JSON logging (captured by Docker and tee'd to file via compose)
     log {
-        output file /var/log/caddy/access.log {
-            roll_size 100mb
-            roll_keep 5
-        }
         format json
     }
 }
@@ -25,28 +21,30 @@
     redir <protocol>://<domain>{uri} permanent
 }
 
+# WUD - Protected by internal auth only (Basic Auth header conflict prevents Caddy layer)
 <protocol>://wud.<domain> {
-    basicauth {
-        <caddy_auth_user> <caddy_auth_password_hash>
-    }
     route {
         reverse_proxy wud:2999
     }
 }
 
-<protocol>://grafana.<domain> {
+# Dozzle - Docker log viewer (protected by Caddy basicauth)
+<protocol>://dozzle.<domain> {
     basicauth {
         <caddy_auth_user> <caddy_auth_password_hash>
     }
+    route {
+        reverse_proxy dozzle:8080
+    }
+}
+
+<protocol>://grafana.<domain> {
     route {
         reverse_proxy grafana:3000
     }
 }
 
 <protocol>://syncthing.<domain> {
-    basicauth {
-        <caddy_auth_user> <caddy_auth_password_hash>
-    }
     route {
         reverse_proxy syncthing:8384
     }

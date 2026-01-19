@@ -60,7 +60,7 @@ services:
       retries: 3
 
   filebrowser:
-    image: filebrowser/filebrowser:v2.54.0
+    image: filebrowser/filebrowser:v2.55.0
     user: ${PUID}:${PGID}
     profiles: [ "extra-storage" ]
     container_name: filebrowser

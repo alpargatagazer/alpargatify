@@ -45,6 +45,11 @@ Optional but commonly required depending on enabled profiles:
 
 See the comments in `bootstrap.sh` for additional variable expectations and port names (any env variable that ends with `_PORT` will be validated).
 
+### Dozzle (Docker Log Viewer)
+Dozzle provides a real-time web interface for viewing Docker container logs. It requires no additional credentials as it's protected by Caddy's Basic Auth layer (uses `CADDY_AUTH_USER`/`CADDY_AUTH_PASSWORD`).
+
+Access it at `dozzle.<your-domain>`. Disable with `--no-dozzle` flag.
+
 ## What `bootstrap.sh` does
 - Creates missing directories such as `volumes/` and your configured `NAVIDROME_MUSIC_PATH`.
 - Validates key `.env` variables and checks presence of required credentials for enabled profiles.
@@ -117,13 +122,15 @@ Implementation notes about profiles:
 This stack includes several security features to protect your services:
 
 ### Caddy Basic Auth
-WUD, Syncthing, and Grafana are protected by an additional HTTP Basic Auth layer at the Caddy proxy level. This provides a "first door" before reaching each service's internal authentication.
+Services like Syncthing and Grafana can be protected by an additional HTTP Basic Auth layer at the Caddy proxy level. This provides a "first door" before reaching each service's internal authentication.
 
 Configure credentials in `.env`:
 ```bash
 CADDY_AUTH_USER="your_username"
 CADDY_AUTH_PASSWORD="your_secure_password"
 ```
+
+Dozzle is only protected by the Caddy Basic Auth layer.
 
 ### Fail2ban Integration
 The stack includes pre-configured Fail2ban filters and jails in the `fail2ban/` directory. These monitor Caddy's JSON logs to ban IPs that make repeated failed authentication attempts.
@@ -180,6 +187,12 @@ Caddy is configured to output JSON-formatted access logs to `/var/log/caddy/acce
 ## Troubleshooting
 - If you see errors about missing `docker compose` or `docker-compose`, install a Compose implementation and retry.
 - If htpasswd generation fails, ensure `openssl` or `htpasswd` is available on the host.
+- **Caddy QUIC Warning**: If you see "failed to sufficiently increase receive buffer size", run this on your Linux host to satisfy Caddy's performance requirements (Caddy now requests up to 7MB):s
+  ```bash
+  sudo sysctl -w net.core.rmem_max=2500000
+  sudo sysctl -w net.core.wmem_max=2500000
+  ```
+  *(To make it persistent, add these lines to `/etc/sysctl.conf` and run `sudo sysctl -p` to apply them)*
 - If services do not start as expected, check the rendered files `configs/Caddyfile.custom` and `configs/prometheus.yml.custom` for substitution issues.
 
 ## Examples

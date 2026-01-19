@@ -68,3 +68,26 @@ services:
     networks:
       - frontend
     restart: unless-stopped
+
+  dozzle:
+    image: amir20/dozzle:latest
+    profiles: [ "dozzle" ]
+    container_name: dozzle
+    labels:
+      - 'wud.tag.include=latest'
+      - 'wud.watch.digest=true'
+    environment:
+      TZ: ${TZ}
+      # Dozzle uses cookie-based auth, so Caddy basicauth works fine
+      DOZZLE_NO_ANALYTICS: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - frontend
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "/dozzle", "healthcheck" ]
+      interval: 3s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
