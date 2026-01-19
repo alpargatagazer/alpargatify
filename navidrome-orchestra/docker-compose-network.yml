@@ -4,15 +4,21 @@ services:
     image: caddy:2.11
     user: ${PUID}:${PGID}
     container_name: caddy
+    entrypoint: [ "/entrypoint.sh" ]
     labels:
       - 'wud.tag.include=^\d+\.\d+$$'
     environment:
       TZ: ${TZ}
+      CADDY_AUTH_USER: ${CADDY_AUTH_USER}
+      # CADDY_AUTH_PASSWORD_HASH is injected by entrypoint from secret
+    secrets:
+      - caddy_auth_password_hash
     volumes:
       - ./configs/Caddyfile.custom:/etc/caddy/Caddyfile:ro
       - ${VOLUMES_PATH}/caddy/data:/data
       - ${VOLUMES_PATH}/caddy/config:/config
       - ${VOLUMES_PATH}/caddy/logs:/var/log/caddy
+      - ./configs/entrypoints/caddy.sh:/entrypoint.sh:ro
     ports:
       - "80:80"
       - "443:443"
@@ -24,8 +30,8 @@ services:
         # without exposing it to anyone else
         aliases:
           - caddy-admin
-    command:
-      - sh
-      - -c
-      - "caddy run --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1 | tee /var/log/caddy/access.log"
     restart: unless-stopped
+
+secrets:
+  caddy_auth_password_hash:
+    file: ${SECRETS_PATH}/caddy_auth_password_hash

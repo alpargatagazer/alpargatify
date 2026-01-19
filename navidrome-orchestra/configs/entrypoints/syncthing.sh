@@ -1,6 +1,26 @@
 #!/bin/sh
 set -eu
 
+# ============================================================================
+# Syncthing entrypoint with Docker secrets support
+# - Reads GUI_PASSWORD from secret if available
+# - Original functionality from syncthing-entrypoint.sh preserved
+# ============================================================================
+
+# Read secret from file
+read_secret() {
+  file="/run/secrets/$1"
+  if [ -f "$file" ]; then
+    cat "$file" | tr -d '\n'
+  fi
+}
+
+# Try to read password from secret first, fallback to env var
+SECRET_PASSWORD="$(read_secret syncthing_gui_password)"
+if [ -n "$SECRET_PASSWORD" ]; then
+  GUI_PASSWORD="$SECRET_PASSWORD"
+fi
+
 # Environment variables with defaults
 : "${GUI_USER:=}"
 : "${GUI_PASSWORD:=}"

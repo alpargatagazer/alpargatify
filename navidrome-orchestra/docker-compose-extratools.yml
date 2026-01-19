@@ -4,6 +4,7 @@ services:
     image: getwud/wud:main
     profiles: [ "wud" ]
     container_name: wud
+    entrypoint: [ "/entrypoint.sh" ]
     labels:
       wud.watch: false
     environment:
@@ -11,7 +12,7 @@ services:
       WUD_SERVER_PORT: 2999
       WUD_WATCHER_LOCAL_CRON: 0 6 * * *
       WUD_AUTH_BASIC_ADMIN_USER: ${WUD_ADMIN_USER}
-      WUD_AUTH_BASIC_ADMIN_HASH: ${WUD_ADMIN_PASSWORD_HASH}
+      # WUD_AUTH_BASIC_ADMIN_HASH is injected by entrypoint from secret
       # Compose triggers
       WUD_TRIGGER_DOCKERCOMPOSE_CORE_FILE: /wud/docker-compose-core.yml
       WUD_TRIGGER_DOCKERCOMPOSE_CORE_PRUNE: true
@@ -28,6 +29,8 @@ services:
       WUD_TRIGGER_DOCKERCOMPOSE_STORAGE_FILE: /wud/docker-compose-storage.yml
       WUD_TRIGGER_DOCKERCOMPOSE_STORAGE_PRUNE: true
       WUD_TRIGGER_DOCKERCOMPOSE_STORAGE_AUTO: false
+    secrets:
+      - wud_admin_password_hash
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./docker-compose-core.yml:/wud/docker-compose-core.yml
@@ -35,6 +38,7 @@ services:
       - ./docker-compose-monitor.yml:/wud/docker-compose-monitor.yml
       - ./docker-compose-network.yml:/wud/docker-compose-network.yml
       - ./docker-compose-storage.yml:/wud/docker-compose-storage.yml
+      - ./configs/entrypoints/wud.sh:/entrypoint.sh:ro
     networks:
       - frontend
       - monitoring
@@ -49,6 +53,7 @@ services:
     image: jlesage/musicbrainz-picard:latest
     profiles: [ "picard" ]
     container_name: picard
+    entrypoint: [ "/entrypoint.sh" ]
     labels:
       - 'wud.tag.include=^v\d+\.\d+\.\d+$$'
     environment:
@@ -58,13 +63,16 @@ services:
       SECURE_CONNECTION: 1
       WEB_AUTHENTICATION: 1
       WEB_AUTHENTICATION_USERNAME: ${PICARD_ADMIN_USER}
-      WEB_AUTHENTICATION_PASSWORD: ${PICARD_ADMIN_PASSWORD}
+      # WEB_AUTHENTICATION_PASSWORD is injected by entrypoint from secret
       DARK_MODE: 1
       TAKE_CONFIG_OWNERSHIP: 1
+    secrets:
+      - picard_admin_password
     volumes:
       - "${VOLUMES_PATH}/picard:/config"
       - "${NAVIDROME_MUSIC_PATH}:/storage/music:rw"
       - "${NAVIDROME_EXTRA_LIBRARIES_PATH}:/storage/extra-libraries:rw"
+      - "./configs/entrypoints/picard.sh:/entrypoint.sh:ro"
     networks:
       - frontend
     restart: unless-stopped
@@ -91,3 +99,9 @@ services:
       timeout: 30s
       retries: 5
       start_period: 30s
+
+secrets:
+  wud_admin_password_hash:
+    file: ${SECRETS_PATH}/wud_admin_password_hash
+  picard_admin_password:
+    file: ${SECRETS_PATH}/picard_admin_password

@@ -96,7 +96,19 @@ cleanup_tmpfiles() {
     done
   fi
 }
-trap cleanup_tmpfiles EXIT
+
+cleanup_secrets() {
+  if [[ -d "${SECRETS_PATH:-}" ]]; then
+    info "Cleaning up secrets directory..."
+    rm -rf "$SECRETS_PATH"
+  fi
+}
+
+cleanup_all() {
+  cleanup_tmpfiles
+  cleanup_secrets
+}
+trap cleanup_all EXIT
 
 ###############################################################################
 # Parse args (only mode flags + profile disable flags)
@@ -329,6 +341,14 @@ fi
 export VOLUMES_PATH
 
 ###############################################################################
+# Create secrets directory and export SECRETS_PATH
+###############################################################################
+SECRETS_PATH="$SCRIPT_DIR/secrets"
+mkdir -p "$SECRETS_PATH"
+export SECRETS_PATH
+info "Secrets directory: $SECRETS_PATH"
+
+###############################################################################
 # Extract numeric uid/gid for both paths and ensure they match
 ###############################################################################
 # Use stat -c '%u' '%g' for numeric user/group (POSIX)
@@ -472,6 +492,36 @@ else
   err "CADDY_AUTH_PASSWORD is empty; cannot generate hash."
   exit 3
 fi
+
+###############################################################################
+# Generate secret files for Docker secrets
+# - WUD and Caddy: store the HASH (not plaintext)
+# - All others: store plaintext value
+###############################################################################
+info "Generating secret files..."
+
+# Helper function to write secret to file
+write_secret() {
+  local name="$1"
+  local value="$2"
+  printf '%s' "$value" > "$SECRETS_PATH/$name"
+  info "  Created secret: $name"
+}
+
+# Secrets with hashes (WUD and Caddy)
+write_secret "wud_admin_password_hash" "$WUD_ADMIN_PASSWORD_HASH"
+write_secret "caddy_auth_password_hash" "$CADDY_AUTH_PASSWORD_HASH"
+
+# Plaintext secrets
+write_secret "lastfm_secret" "${LASTFM_SECRET:-}"
+write_secret "navidrome_encryption_key" "${NAVIDROME_PASSWORDENCRYPTIONKEY:-}"
+write_secret "picard_admin_password" "${PICARD_ADMIN_PASSWORD:-}"
+write_secret "grafana_admin_password" "${GRAFANA_ADMIN_PASSWORD:-}"
+write_secret "sftp_password" "${SFTP_PASSWORD:-}"
+write_secret "syncthing_gui_password" "${SYNCTHING_GUI_PASSWORD:-}"
+write_secret "filebrowser_admin_password" "${FILEBROWSER_ADMIN_PASSWORD:-}"
+
+info "All secret files generated."
 
 ###############################################################################
 # Template expansion helper (dynamic PORT placeholder handling)
@@ -660,12 +710,21 @@ if [[ $SUPPORTS_PROFILE -eq 1 ]]; then
 fi
 
 ###############################################################################
-# Unset unused secrets to prevent leaking into the environment
+# Unset ALL sensitive variables to prevent leaking into the environment
+# The values are now stored in secret files and read by entrypoints
 ###############################################################################
-# WUD_ADMIN_PASSWORD uses WUD_ADMIN_PASSWORD_HASH for the container
+info "Unsetting sensitive environment variables..."
+unset LASTFM_SECRET
+unset NAVIDROME_PASSWORDENCRYPTIONKEY
 unset WUD_ADMIN_PASSWORD
-# CADDY_AUTH_PASSWORD uses CADDY_AUTH_PASSWORD_HASH in Caddyfile
+unset WUD_ADMIN_PASSWORD_HASH
+unset PICARD_ADMIN_PASSWORD
+unset GRAFANA_ADMIN_PASSWORD
+unset SFTP_PASSWORD
+unset SYNCTHING_GUI_PASSWORD
+unset FILEBROWSER_ADMIN_PASSWORD
 unset CADDY_AUTH_PASSWORD
+unset CADDY_AUTH_PASSWORD_HASH
 
 ###############################################################################
 # Invoke compose with selected mode using original compose files
