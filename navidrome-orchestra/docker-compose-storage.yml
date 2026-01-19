@@ -3,7 +3,7 @@ services:
   sftp:
     image: atmoz/sftp:alpine
     container_name: sftp
-    entrypoint: [ "/custom-entrypoint.sh" ]
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     labels:
       - 'wud.tag.include=alpine'
       - 'wud.watch.digest=true'
@@ -18,7 +18,7 @@ services:
     volumes:
       - ${NAVIDROME_MUSIC_PATH}:/home/${SFTP_USER}/music:rw
       - ${VOLUMES_PATH}/sftp/logs:/var/log/sftp
-      - ./configs/entrypoints/sftp.sh:/custom-entrypoint.sh:ro
+      - ./configs/entrypoints/sftp.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro
     ports:
       - "${SFTP_PORT}:22"
     networks:
@@ -32,7 +32,7 @@ services:
     container_name: syncthing
     labels:
       - 'wud.tag.include=^\d+\.\d+\.\d+$$'
-    entrypoint: [ "/usr/local/bin/docker-entrypoint.sh" ]
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     environment:
       TZ: ${TZ}
       PUID: ${PUID}
@@ -49,7 +49,7 @@ services:
       # Mount the folder where Navidrome is saving its backups
       - ${VOLUMES_PATH}/navidrome/backup:/srv/backups:rw
       # Custom entrypoint script in your repo (read-only)
-      - ./configs/entrypoints/syncthing.sh:/usr/local/bin/docker-entrypoint.sh:ro
+      - ./configs/entrypoints/syncthing.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro
     ports:
       - "${SYNCTHING_SYNC_PORT}:22000/tcp"
       - "${SYNCTHING_SYNC_PORT}:22000/udp"
@@ -71,7 +71,7 @@ services:
     labels:
       - 'wud.tag.include=^v\d+\.\d+\.\d+$$'
     # Use a custom entrypoint to initialise DB + admin user (mapped below)
-    entrypoint: [ "/usr/local/bin/docker-entrypoint.sh" ]
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     environment:
       TZ: ${TZ}
       PUID: ${PUID}
@@ -89,7 +89,7 @@ services:
       - ${NAVIDROME_MUSIC_PATH}:/srv/music:rw
       - ${NAVIDROME_EXTRA_LIBRARIES_PATH}:/srv/extra-libraries:rw
       # custom entrypoint script in your repo (read-only)
-      - ./configs/entrypoints/filebrowser.sh:/usr/local/bin/docker-entrypoint.sh:ro
+      - ./configs/entrypoints/filebrowser.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro
     networks:
       - frontend
     restart: unless-stopped

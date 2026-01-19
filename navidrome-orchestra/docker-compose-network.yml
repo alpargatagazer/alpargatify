@@ -4,7 +4,7 @@ services:
     image: caddy:2.11
     user: ${PUID}:${PGID}
     container_name: caddy
-    entrypoint: [ "/entrypoint.sh" ]
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     labels:
       - 'wud.tag.include=^\d+\.\d+$$'
     environment:
@@ -18,7 +18,7 @@ services:
       - ${VOLUMES_PATH}/caddy/data:/data
       - ${VOLUMES_PATH}/caddy/config:/config
       - ${VOLUMES_PATH}/caddy/logs:/var/log/caddy
-      - ./configs/entrypoints/caddy.sh:/entrypoint.sh:ro
+      - ./configs/entrypoints/caddy.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro
     ports:
       - "80:80"
       - "443:443"

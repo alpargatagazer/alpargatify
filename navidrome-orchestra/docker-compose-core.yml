@@ -4,7 +4,7 @@ services:
     image: deluan/navidrome:0.59.0
     user: ${PUID}:${PGID}
     container_name: navidrome
-    entrypoint: [ "/entrypoint.sh" ]
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     labels:
       - 'wud.tag.include=^\d+\.\d+\.\d+$$'
     environment:
@@ -25,7 +25,7 @@ services:
       - "${NAVIDROME_EXTRA_LIBRARIES_PATH}:/extra-libraries:ro"
       - "${VOLUMES_PATH}/navidrome:/data"
       - "./configs/navidrome.toml:/navidrome.toml:ro"
-      - "./configs/entrypoints/navidrome.sh:/entrypoint.sh:ro"
+      - "./configs/entrypoints/navidrome.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro"
     networks:
       - frontend
       - monitoring

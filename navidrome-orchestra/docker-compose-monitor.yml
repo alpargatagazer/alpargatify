@@ -5,7 +5,7 @@ services:
     user: ${PUID}:${PGID}
     profiles: [ "monitoring" ]
     container_name: grafana
-    entrypoint: [ "/entrypoint.sh" ]
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     labels:
       - 'wud.tag.include=main'
       - 'wud.watch.digest=true'
@@ -21,7 +21,7 @@ services:
       - ./configs/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/provisioner.yaml
       - ${VOLUMES_PATH}/grafana:/var/lib/grafana
       - ./grafana-dashboards:/var/lib/grafana/dashboards
-      - ./configs/entrypoints/grafana.sh:/entrypoint.sh:ro
+      - ./configs/entrypoints/grafana.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro
     networks:
       - frontend
       - monitoring

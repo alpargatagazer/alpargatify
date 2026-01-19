@@ -364,12 +364,12 @@ fi
 
 info "Owner UID/GID of music path: ${MUSIC_UID}:${MUSIC_GID}"
 
-###############################################################################
 # Export PUID and PGID for docker-compose environment
 ###############################################################################
 export PUID="$MUSIC_UID"
 export PGID="$MUSIC_GID"
-info "Exported PUID=${PUID}, PGID=${PGID}"
+export CONTAINER_ENTRYPOINT_PATH="/entrypoint.sh"
+info "Exported PUID=${PUID}, PGID=${PGID}, CONTAINER_ENTRYPOINT_PATH=${CONTAINER_ENTRYPOINT_PATH}"
 
 ###############################################################################
 # Generate random CUSTOM_METRICS_PATH for Prometheus to scrape microservices

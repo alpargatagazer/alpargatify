@@ -4,7 +4,7 @@ services:
     image: getwud/wud:main
     profiles: [ "wud" ]
     container_name: wud
-    entrypoint: [ "/entrypoint.sh" ]
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     labels:
       wud.watch: false
     environment:
@@ -38,7 +38,7 @@ services:
       - ./docker-compose-monitor.yml:/wud/docker-compose-monitor.yml
       - ./docker-compose-network.yml:/wud/docker-compose-network.yml
       - ./docker-compose-storage.yml:/wud/docker-compose-storage.yml
-      - ./configs/entrypoints/wud.sh:/entrypoint.sh:ro
+      - ./configs/entrypoints/wud.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro
     networks:
       - frontend
       - monitoring
@@ -53,7 +53,7 @@ services:
     image: jlesage/musicbrainz-picard:latest
     profiles: [ "picard" ]
     container_name: picard
-    entrypoint: [ "/entrypoint.sh" ]
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     labels:
       - 'wud.tag.include=^v\d+\.\d+\.\d+$$'
     environment:
@@ -72,7 +72,7 @@ services:
       - "${VOLUMES_PATH}/picard:/config"
       - "${NAVIDROME_MUSIC_PATH}:/storage/music:rw"
       - "${NAVIDROME_EXTRA_LIBRARIES_PATH}:/storage/extra-libraries:rw"
-      - "./configs/entrypoints/picard.sh:/entrypoint.sh:ro"
+      - "./configs/entrypoints/picard.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro"
     networks:
       - frontend
     restart: unless-stopped
