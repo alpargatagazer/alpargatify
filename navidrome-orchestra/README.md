@@ -164,6 +164,7 @@ The stack includes pre-configured Fail2ban filters and jails in the `fail2ban/` 
    ```bash
    sudo fail2ban-client status caddy-navidrome
    sudo fail2ban-client status caddy-auth
+   sudo fail2ban-client status sftp
    ```
 
 **Ban settings:**
@@ -193,6 +194,7 @@ Caddy is configured to output JSON-formatted access logs to `/var/log/caddy/acce
   sudo sysctl -w net.core.wmem_max=2500000
   ```
   *(To make it persistent, add these lines to `/etc/sysctl.conf` and run `sudo sysctl -p` to apply them)*
+- **Fail2ban Permission Warning**: If you see `Warning: some journal files were not opened...` when checking status, it's because you are running it as a non-root user. Use `sudo service fail2ban status` to see the full output without warnings.
 - If services do not start as expected, check the rendered files `configs/Caddyfile.custom` and `configs/prometheus.yml.custom` for substitution issues.
 
 ## Examples
