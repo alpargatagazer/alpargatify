@@ -96,7 +96,19 @@ cleanup_tmpfiles() {
     done
   fi
 }
-trap cleanup_tmpfiles EXIT
+
+cleanup_secrets() {
+  if [[ -d "${SECRETS_PATH:-}" ]]; then
+    info "Cleaning up secrets directory..."
+    rm -rf "$SECRETS_PATH"
+  fi
+}
+
+cleanup_all() {
+  cleanup_tmpfiles
+  cleanup_secrets
+}
+trap cleanup_all EXIT
 
 ###############################################################################
 # Parse args (only mode flags + profile disable flags)
@@ -108,6 +120,7 @@ ENABLE_WUD=1
 ENABLE_EXTRA_STORAGE=1
 ENABLE_MONITORING=1
 ENABLE_PICARD=1
+ENABLE_DOZZLE=1
 # - local: default behavior, <protocol>="http"
 # - prod:  production behavior, <protocol>="https"
 PROD_MODE=0   # 0=local, 1=prod
@@ -125,6 +138,7 @@ Profile control (defaults: all enabled):
   --no-extra-storage: disable the "extra-storage" profile
   --no-monitoring   : disable the "monitoring" profile
   --no-picard       : disable the "picard" profile
+  --no-dozzle       : disable the "dozzle" profile
   --prod            : Caddy starts using HTTPS
 
 Examples:
@@ -143,6 +157,7 @@ while (( "$#" )); do
     --no-extra-storage) ENABLE_EXTRA_STORAGE=0; shift ;;
     --no-monitoring) ENABLE_MONITORING=0; shift ;;
     --no-picard) ENABLE_PICARD=0; shift ;;
+    --no-dozzle) ENABLE_DOZZLE=0; shift ;;
     -h|--help) usage; exit 0 ;;
     --) shift; break ;;
     -*) echo "Unknown option: $1" >&2; usage; exit 2 ;;
@@ -204,6 +219,12 @@ if [ -z "${PICARD_ADMIN_USER:-}" ] || [ -z "${PICARD_ADMIN_PASSWORD:-}" ] && [ $
   exit 3
 fi
 
+# Caddy Basic Auth credentials (required for WUD, Syncthing, and Grafana)
+if [ -z "${CADDY_AUTH_USER:-}" ] || [ -z "${CADDY_AUTH_PASSWORD:-}" ]; then
+  err "CADDY_AUTH_USER and CADDY_AUTH_PASSWORD must be set in .env. These are used for additional protection on WUD, Syncthing, and Grafana. Exiting."
+  exit 3
+fi
+
 ###############################################################################
 # Collect and validate all *_PORT variables dynamically
 # - builds PORT_VARS array containing variable names (e.g. PROMETHEUS_PORT)
@@ -261,7 +282,7 @@ fi
 
 # Show which secrets are present without printing their values
 echo "Secrets present:"
-for s in WUD_ADMIN_PASSWORD GRAFANA_ADMIN_PASSWORD SFTP_PASSWORD SYNCTHING_GUI_PASSWORD FILEBROWSER_ADMIN_PASSWORD PICARD_ADMIN_PASSWORD; do
+for s in WUD_ADMIN_PASSWORD GRAFANA_ADMIN_PASSWORD SFTP_PASSWORD SYNCTHING_GUI_PASSWORD FILEBROWSER_ADMIN_PASSWORD PICARD_ADMIN_PASSWORD CADDY_AUTH_PASSWORD; do
   if [[ -n "${!s:-}" ]]; then
     echo "  - ${s}=<set>"
   else
@@ -320,6 +341,14 @@ fi
 export VOLUMES_PATH
 
 ###############################################################################
+# Create secrets directory and export SECRETS_PATH
+###############################################################################
+SECRETS_PATH="$SCRIPT_DIR/secrets"
+mkdir -p "$SECRETS_PATH"
+export SECRETS_PATH
+info "Secrets directory: $SECRETS_PATH"
+
+###############################################################################
 # Extract numeric uid/gid for both paths and ensure they match
 ###############################################################################
 # Use stat -c '%u' '%g' for numeric user/group (POSIX)
@@ -335,12 +364,12 @@ fi
 
 info "Owner UID/GID of music path: ${MUSIC_UID}:${MUSIC_GID}"
 
-###############################################################################
 # Export PUID and PGID for docker-compose environment
 ###############################################################################
 export PUID="$MUSIC_UID"
 export PGID="$MUSIC_GID"
-info "Exported PUID=${PUID}, PGID=${PGID}"
+export CONTAINER_ENTRYPOINT_PATH="/entrypoint.sh"
+info "Exported PUID=${PUID}, PGID=${PGID}, CONTAINER_ENTRYPOINT_PATH=${CONTAINER_ENTRYPOINT_PATH}"
 
 ###############################################################################
 # Generate random CUSTOM_METRICS_PATH for Prometheus to scrape microservices
@@ -382,10 +411,12 @@ info "Generated NAVIDROME_METRICS_PASSWORD (hidden)."
 # - Preferred: openssl passwd -apr1 (Apache MD5)
 # - Fallback: use htpasswd (bcrypt) if available
 ###############################################################################
-generate_htpasswd_hash() {
+# Purpose: Generate hash for WUD (Apache MD5 preferred for compatibility)
+generate_wud_hash() {
   local user="$1"; local pass="$2"; local hash=""
 
   # 1) openssl passwd -apr1 -> Apache MD5 ($apr1$...)
+  # This is the standard for many basic auth implementations like WUD
   if command -v openssl >/dev/null 2>&1; then
     if hash="$(openssl passwd -apr1 "$pass" 2>/dev/null)"; then
       echo "$hash"
@@ -393,11 +424,9 @@ generate_htpasswd_hash() {
     fi
   fi
 
-  # 2) htpasswd (apache tools) -> bcrypt with -B
+  # 2) htpasswd fallback (bcrypt)
   if command -v htpasswd >/dev/null 2>&1; then
-    # htpasswd -nbB user pass  prints: user:$2y$...
     hash_line="$(htpasswd -nbB "$user" "$pass" 2>/dev/null || true)"
-    # extract after colon
     hash="${hash_line#*:}"
     if [[ -n "$hash" ]]; then
       echo "$hash"
@@ -408,9 +437,36 @@ generate_htpasswd_hash() {
   return 1
 }
 
-# Create the hashed password and export
+# Purpose: Generate hash specifically for Caddy (Must be Bcrypt)
+generate_caddy_hash() {
+  local user="$1"; local pass="$2"; local hash=""
+
+  # 1) Try using the Caddy container itself (Best for compatibility)
+  if command -v docker >/dev/null 2>&1; then
+    if hash="$(docker run --rm caddy:2.11 caddy hash-password --plaintext "$pass" 2>/dev/null)"; then
+      if [[ -n "$hash" ]]; then
+        echo "$hash"
+        return 0
+      fi
+    fi
+  fi
+
+  # 2) htpasswd with -B (Bcrypt)
+  if command -v htpasswd >/dev/null 2>&1; then
+    hash_line="$(htpasswd -nbB "$user" "$pass" 2>/dev/null || true)"
+    hash="${hash_line#*:}"
+    if [[ -n "$hash" ]]; then
+      echo "$hash"
+      return 0
+    fi
+  fi
+  
+  return 1
+}
+
+# Create the hashed password for WUD
 if [[ -n "${WUD_ADMIN_PASSWORD:-}" ]]; then
-  WUD_ADMIN_PASSWORD_HASH="$(generate_htpasswd_hash "$WUD_ADMIN_USER" "$WUD_ADMIN_PASSWORD" || true)"
+  WUD_ADMIN_PASSWORD_HASH="$(generate_wud_hash "$WUD_ADMIN_USER" "$WUD_ADMIN_PASSWORD" || true)"
   if [[ -z "${WUD_ADMIN_PASSWORD_HASH:-}" ]]; then
     err "Failed to generate htpasswd-compliant hash for WUD_ADMIN_PASSWORD. Ensure 'htpasswd' or 'openssl' is available."
     exit 5
@@ -422,6 +478,50 @@ else
   err "WUD_ADMIN_PASSWORD is empty; cannot generate hash."
   exit 3
 fi
+
+# Create the Caddy auth hash and export
+if [[ -n "${CADDY_AUTH_PASSWORD:-}" ]]; then
+  CADDY_AUTH_PASSWORD_HASH="$(generate_caddy_hash "$CADDY_AUTH_USER" "$CADDY_AUTH_PASSWORD" || true)"
+  if [[ -z "${CADDY_AUTH_PASSWORD_HASH:-}" ]]; then
+    err "Failed to generate htpasswd-compliant hash for CADDY_AUTH_PASSWORD. Ensure 'htpasswd' or 'openssl' is available."
+    exit 5
+  fi
+  export CADDY_AUTH_PASSWORD_HASH
+  info "Generated CADDY_AUTH_PASSWORD_HASH (hidden)."
+else
+  err "CADDY_AUTH_PASSWORD is empty; cannot generate hash."
+  exit 3
+fi
+
+###############################################################################
+# Generate secret files for Docker secrets
+# - WUD and Caddy: store the HASH (not plaintext)
+# - All others: store plaintext value
+###############################################################################
+info "Generating secret files..."
+
+# Helper function to write secret to file
+write_secret() {
+  local name="$1"
+  local value="$2"
+  printf '%s' "$value" > "$SECRETS_PATH/$name"
+  info "  Created secret: $name"
+}
+
+# Secrets with hashes (WUD and Caddy)
+write_secret "wud_admin_password_hash" "$WUD_ADMIN_PASSWORD_HASH"
+write_secret "caddy_auth_password_hash" "$CADDY_AUTH_PASSWORD_HASH"
+
+# Plaintext secrets
+write_secret "lastfm_secret" "${LASTFM_SECRET:-}"
+write_secret "navidrome_encryption_key" "${NAVIDROME_PASSWORDENCRYPTIONKEY:-}"
+write_secret "picard_admin_password" "${PICARD_ADMIN_PASSWORD:-}"
+write_secret "grafana_admin_password" "${GRAFANA_ADMIN_PASSWORD:-}"
+write_secret "sftp_password" "${SFTP_PASSWORD:-}"
+write_secret "syncthing_gui_password" "${SYNCTHING_GUI_PASSWORD:-}"
+write_secret "filebrowser_admin_password" "${FILEBROWSER_ADMIN_PASSWORD:-}"
+
+info "All secret files generated."
 
 ###############################################################################
 # Template expansion helper (dynamic PORT placeholder handling)
@@ -456,6 +556,9 @@ expand_vars_file() {
   sed_args+=( -e "s|<wud_admin_user>|\\\${WUD_ADMIN_USER}|g" )
   sed_args+=( -e "s|<wud_admin_password>|\\\${WUD_ADMIN_PASSWORD}|g" )
   sed_args+=( -e "s|<navidrome_metrics_password>|\\\${NAVIDROME_METRICS_PASSWORD}|g" )
+  # Caddy Basic Auth placeholders
+  sed_args+=( -e "s|<caddy_auth_user>|\\\${CADDY_AUTH_USER}|g" )
+  sed_args+=( -e "s|<caddy_auth_password_hash>|\\\${CADDY_AUTH_PASSWORD_HASH}|g" )
 
   # For each discovered PORT var, add a replacement
   for pv in "${PORT_VARS[@]:-}"; do
@@ -598,10 +701,30 @@ if [[ $SUPPORTS_PROFILE -eq 1 ]]; then
   if [[ $ENABLE_PICARD -eq 1 ]]; then
     PROFILE_ARGS+=( --profile picard )
   fi
+  if [[ $ENABLE_DOZZLE -eq 1 ]]; then
+    PROFILE_ARGS+=( --profile dozzle )
+  fi
   if [[ $PROD_MODE -eq 1 ]]; then
     PROFILE_ARGS+=( --profile prod )
   fi
 fi
+
+###############################################################################
+# Unset ALL sensitive variables to prevent leaking into the environment
+# The values are now stored in secret files and read by entrypoints
+###############################################################################
+info "Unsetting sensitive environment variables..."
+unset LASTFM_SECRET
+unset NAVIDROME_PASSWORDENCRYPTIONKEY
+unset WUD_ADMIN_PASSWORD
+unset WUD_ADMIN_PASSWORD_HASH
+unset PICARD_ADMIN_PASSWORD
+unset GRAFANA_ADMIN_PASSWORD
+unset SFTP_PASSWORD
+unset SYNCTHING_GUI_PASSWORD
+unset FILEBROWSER_ADMIN_PASSWORD
+unset CADDY_AUTH_PASSWORD
+unset CADDY_AUTH_PASSWORD_HASH
 
 ###############################################################################
 # Invoke compose with selected mode using original compose files

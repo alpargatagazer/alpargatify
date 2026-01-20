@@ -5,19 +5,23 @@ services:
     user: ${PUID}:${PGID}
     profiles: [ "monitoring" ]
     container_name: grafana
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     labels:
       - 'wud.tag.include=main'
       - 'wud.watch.digest=true'
     environment:
       TZ: ${TZ}
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      # GF_SECURITY_ADMIN_PASSWORD is injected by entrypoint from secret
       GF_USERS_ALLOW_SIGN_UP: false
+    secrets:
+      - grafana_admin_password
     volumes:
       - ./configs/grafana-datasources.yml:/etc/grafana/provisioning/datasources/provisioner.yaml
       - ./configs/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/provisioner.yaml
       - ${VOLUMES_PATH}/grafana:/var/lib/grafana
       - ./grafana-dashboards:/var/lib/grafana/dashboards
+      - ./configs/entrypoints/grafana.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro
     networks:
       - frontend
       - monitoring
@@ -40,7 +44,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=5d
+      - --storage.tsdb.retention.time=14d
       - --storage.tsdb.retention.size=10GB
       - --storage.tsdb.min-block-duration=1h
       - --storage.tsdb.max-block-duration=12h
@@ -73,3 +77,7 @@ services:
     networks:
       - monitoring
     restart: unless-stopped
+
+secrets:
+  grafana_admin_password:
+    file: ${SECRETS_PATH}/grafana_admin_password

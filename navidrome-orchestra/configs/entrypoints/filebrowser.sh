@@ -1,6 +1,26 @@
 #!/bin/sh
 set -eu
 
+# ============================================================================
+# Filebrowser entrypoint with Docker secrets support
+# - Reads FILEBROWSER_ADMIN_PASSWORD from secret if available
+# - Original functionality from filebrowser-entrypoint.sh preserved
+# ============================================================================
+
+# Read secret from file
+read_secret() {
+  file="/run/secrets/$1"
+  if [ -f "$file" ]; then
+    cat "$file" | tr -d '\n'
+  fi
+}
+
+# Try to read password from secret first, fallback to env var
+SECRET_PASSWORD="$(read_secret filebrowser_admin_password)"
+if [ -n "$SECRET_PASSWORD" ]; then
+  FILEBROWSER_ADMIN_PASSWORD="$SECRET_PASSWORD"
+fi
+
 # Environment variables with defaults
 : "${DB_DIR:=/database}"
 : "${DB_FILE:=${DB_DIR}/filebrowser.db}"

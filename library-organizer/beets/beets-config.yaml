@@ -239,7 +239,7 @@ art_filename: cover
 fetchart:
   auto: yes                 # Fetch art automatically during import
   cautious: yes             # Prefer trusted filenames
-  cover_names: front cover album folder art
+  cover_names: cover front album folder art
   minwidth: 500             # Minimum image width (px)
   maxwidth: 1400            # Maximum image width (px)
   quality: 75               # JPEG compression quality (1-100)

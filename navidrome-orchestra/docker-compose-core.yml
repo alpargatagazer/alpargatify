@@ -4,24 +4,28 @@ services:
     image: deluan/navidrome:0.59.0
     user: ${PUID}:${PGID}
     container_name: navidrome
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     labels:
       - 'wud.tag.include=^\d+\.\d+\.\d+$$'
     environment:
       TZ: ${TZ}
       ND_CONFIGFILE: /navidrome.toml
       ND_LASTFM_APIKEY: ${LASTFM_APIKEY}
-      ND_LASTFM_SECRET: ${LASTFM_SECRET}
+      # ND_LASTFM_SECRET is injected by entrypoint from secret
       ND_PROMETHEUS_METRICSPATH: ${CUSTOM_METRICS_PATH}
       ND_PROMETHEUS_PASSWORD: ${NAVIDROME_METRICS_PASSWORD}
       # Backups are saved under your Navidrome volume
       ND_BACKUP_PATH: /data/backup/
-      # This is needed during first boot
-      ND_PASSWORDENCRYPTIONKEY: ${NAVIDROME_PASSWORDENCRYPTIONKEY}
+      # ND_PASSWORDENCRYPTIONKEY is injected by entrypoint from secret
+    secrets:
+      - lastfm_secret
+      - navidrome_encryption_key
     volumes:
       - "${NAVIDROME_MUSIC_PATH}:/music:ro"
       - "${NAVIDROME_EXTRA_LIBRARIES_PATH}:/extra-libraries:ro"
       - "${VOLUMES_PATH}/navidrome:/data"
       - "./configs/navidrome.toml:/navidrome.toml:ro"
+      - "./configs/entrypoints/navidrome.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro"
     networks:
       - frontend
       - monitoring
@@ -75,3 +79,9 @@ networks:
   caddy-with-admin:
     driver_opts:
       com.docker.network.driver.mtu: 1450
+
+secrets:
+  lastfm_secret:
+    file: ${SECRETS_PATH}/lastfm_secret
+  navidrome_encryption_key:
+    file: ${SECRETS_PATH}/navidrome_encryption_key

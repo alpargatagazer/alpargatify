@@ -41,8 +41,14 @@ Optional but commonly required depending on enabled profiles:
 - `SYNCTHING_GUI_USER`, `SYNCTHING_GUI_PASSWORD` — required if extra-storage profile is enabled.
 - `FILEBROWSER_ADMIN_USER`, `FILEBROWSER_ADMIN_PASSWORD` — required for filebrowser.
 - `PICARD_ADMIN_USER`, `PICARD_ADMIN_PASSWORD` — required for MusicBrainz Picard.
+- `CADDY_AUTH_USER`, `CADDY_AUTH_PASSWORD` — **required** for the external protection layer on WUD, Syncthing, and Grafana.
 
 See the comments in `bootstrap.sh` for additional variable expectations and port names (any env variable that ends with `_PORT` will be validated).
+
+### Dozzle (Docker Log Viewer)
+Dozzle provides a real-time web interface for viewing Docker container logs. It requires no additional credentials as it's protected by Caddy's Basic Auth layer (uses `CADDY_AUTH_USER`/`CADDY_AUTH_PASSWORD`).
+
+Access it at `dozzle.<your-domain>`. Disable with `--no-dozzle` flag.
 
 ## What `bootstrap.sh` does
 - Creates missing directories such as `volumes/` and your configured `NAVIDROME_MUSIC_PATH`.
@@ -111,9 +117,84 @@ Implementation notes about profiles:
 - `bootstrap.sh` validates presence of required secrets in `.env` and will refuse to run or warn when critical secrets are missing for enabled profiles.
 - The script does not print secret values to logs; it only reports presence/absence.
 
+## Security Hardening
+
+This stack includes several security features to protect your services:
+
+### Caddy Basic Auth
+Services like Syncthing and Grafana can be protected by an additional HTTP Basic Auth layer at the Caddy proxy level. This provides a "first door" before reaching each service's internal authentication.
+
+Configure credentials in `.env`:
+```bash
+CADDY_AUTH_USER="your_username"
+CADDY_AUTH_PASSWORD="your_secure_password"
+```
+
+Dozzle is only protected by the Caddy Basic Auth layer.
+
+### Fail2ban Integration
+The stack includes pre-configured Fail2ban filters and jails in the `fail2ban/` directory. These monitor Caddy's JSON logs to ban IPs that make repeated failed authentication attempts.
+
+**Setup on Ubuntu (production server):**
+
+1. **Install Fail2ban:**
+   ```bash
+   sudo apt update && sudo apt install fail2ban -y
+   ```
+
+2. **Copy configuration files:**
+   ```bash
+   sudo cp fail2ban/filter.d/* /etc/fail2ban/filter.d/
+   sudo cp fail2ban/jail.d/* /etc/fail2ban/jail.d/
+   ```
+
+3. **Update log path in jails:**
+   Edit `/etc/fail2ban/jail.d/caddy-*.conf` and set `logpath` to match your `VOLUMES_PATH`:
+   ```ini
+   logpath = /path/to/your/volumes/caddy/logs/access.log
+   ```
+
+4. **Restart Fail2ban:**
+   ```bash
+   sudo systemctl restart fail2ban
+   sudo fail2ban-client status
+   ```
+
+5. **Verify jails are active:**
+   ```bash
+   sudo fail2ban-client status caddy-navidrome
+   sudo fail2ban-client status caddy-auth
+   sudo fail2ban-client status sftp
+   ```
+
+**Ban settings:**
+- `caddy-navidrome`: 5 failed attempts in 60s = 1 hour ban (strict, targets Navidrome API)
+- `caddy-auth`: 10 failed attempts in 5 min = 30 min ban (general auth failures)
+- `sftp`: 5 failed attempts in 10 min = 24 hour ban (strict, targets SFTP port)
+
+**Note on SFTP Logs:**
+SFTP logs are redirected to a file in a volume via a custom entrypoint in `docker-compose-storage.yml`. This ensures the log path remains stable even if the container is recreated. Configure Fail2ban to point to:
+`${VOLUMES_PATH}/sftp/logs/access.log` (on the host).
+
+**Unban an IP:**
+```bash
+sudo fail2ban-client set caddy-navidrome unbanip X.X.X.X
+sudo fail2ban-client set sftp unbanip X.X.X.X
+```
+
+### JSON Logging
+Caddy is configured to output JSON-formatted access logs to `/var/log/caddy/access.log` (inside the container, mapped to `${VOLUMES_PATH}/caddy/logs/` on the host). Logs rotate at 100MB with 5 files retained.
+
 ## Troubleshooting
 - If you see errors about missing `docker compose` or `docker-compose`, install a Compose implementation and retry.
 - If htpasswd generation fails, ensure `openssl` or `htpasswd` is available on the host.
+- **Caddy QUIC Warning**: If you see "failed to sufficiently increase receive buffer size", run this on your Linux host to satisfy Caddy's performance requirements (Caddy now requests up to 7MB):s
+  ```bash
+  sudo sysctl -w net.core.rmem_max=2500000
+  sudo sysctl -w net.core.wmem_max=2500000
+  ```
+  *(To make it persistent, add these lines to `/etc/sysctl.conf` and run `sudo sysctl -p` to apply them)*
+- **Fail2ban Permission Warning**: If you see `Warning: some journal files were not opened...` when checking status, it's because you are running it as a non-root user. Use `sudo service fail2ban status` to see the full output without warnings.
 - If services do not start as expected, check the rendered files `configs/Caddyfile.custom` and `configs/prometheus.yml.custom` for substitution issues.
 
 ## Examples

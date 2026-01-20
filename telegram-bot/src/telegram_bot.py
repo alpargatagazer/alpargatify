@@ -303,7 +303,7 @@ class TelegramBot:
                     if album_obj:
                         type_tag = self._get_album_type_tag(album_obj)
                 
-                msg += f"👤 <b>{user}</b> is listening to:\n🎵 {title} - {artist} ({album_name}{type_tag}, {year})\n\n"
+                msg += f"👤 <b>{user}</b> is listening to:\n🎵 {artist} - {title} ({album_name}{type_tag}, {year})\n\n"
 
             self.send_message(message.chat.id, msg, parse_mode="HTML")
 

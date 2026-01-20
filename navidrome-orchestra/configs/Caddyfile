@@ -6,6 +6,11 @@
     metrics {
         per_host
     }
+
+    # JSON logging (captured by Docker and tee'd to file via compose)
+    log {
+        format json
+    }
 }
 
 <protocol>://<domain> {
@@ -16,9 +21,20 @@
     redir <protocol>://<domain>{uri} permanent
 }
 
+# WUD - Protected by internal auth only (Basic Auth header conflict prevents Caddy layer)
 <protocol>://wud.<domain> {
     route {
         reverse_proxy wud:2999
+    }
+}
+
+# Dozzle - Docker log viewer (protected by Caddy basicauth)
+<protocol>://dozzle.<domain> {
+    basicauth {
+        <caddy_auth_user> <caddy_auth_password_hash>
+    }
+    route {
+        reverse_proxy dozzle:8080
     }
 }
 

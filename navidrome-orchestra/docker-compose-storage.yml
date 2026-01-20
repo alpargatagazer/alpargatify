@@ -3,15 +3,22 @@ services:
   sftp:
     image: atmoz/sftp:alpine
     container_name: sftp
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     labels:
       - 'wud.tag.include=alpine'
       - 'wud.watch.digest=true'
-    command:
-      - ${SFTP_USER}:${SFTP_PASSWORD}:${PUID}:${PGID}
     environment:
       TZ: ${TZ}
+      SFTP_USER: ${SFTP_USER}
+      PUID: ${PUID}
+      PGID: ${PGID}
+      # SFTP_PASSWORD is injected by entrypoint from secret
+    secrets:
+      - sftp_password
     volumes:
       - ${NAVIDROME_MUSIC_PATH}:/home/${SFTP_USER}/music:rw
+      - ${VOLUMES_PATH}/sftp/logs:/var/log/sftp
+      - ./configs/entrypoints/sftp.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro
     ports:
       - "${SFTP_PORT}:22"
     networks:
@@ -25,13 +32,15 @@ services:
     container_name: syncthing
     labels:
       - 'wud.tag.include=^\d+\.\d+\.\d+$$'
-    entrypoint: [ "/usr/local/bin/docker-entrypoint.sh" ]
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     environment:
       TZ: ${TZ}
       PUID: ${PUID}
       PGID: ${PGID}
       GUI_USER: ${SYNCTHING_GUI_USER}
-      GUI_PASSWORD: ${SYNCTHING_GUI_PASSWORD}
+      # GUI_PASSWORD is injected by entrypoint from secret
+    secrets:
+      - syncthing_gui_password
     volumes:
       # Syncthing config directory (will contain config.xml, key, index, etc.)
       - ${VOLUMES_PATH}/syncthing:/var/syncthing:rw
@@ -39,8 +48,8 @@ services:
       - ${NAVIDROME_MUSIC_PATH}:/srv/music:rw
       # Mount the folder where Navidrome is saving its backups
       - ${VOLUMES_PATH}/navidrome/backup:/srv/backups:rw
-      # Custom entrypoint script to initialize Syncthing with our desired settings
-      - ./configs/syncthing-entrypoint.sh:/usr/local/bin/docker-entrypoint.sh:ro
+      # Custom entrypoint script in your repo (read-only)
+      - ./configs/entrypoints/syncthing.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro
     ports:
       - "${SYNCTHING_SYNC_PORT}:22000/tcp"
       - "${SYNCTHING_SYNC_PORT}:22000/udp"
@@ -55,20 +64,22 @@ services:
       retries: 3
 
   filebrowser:
-    image: filebrowser/filebrowser:v2.54.0
+    image: filebrowser/filebrowser:v2.55.0
     user: ${PUID}:${PGID}
     profiles: [ "extra-storage" ]
     container_name: filebrowser
     labels:
       - 'wud.tag.include=^v\d+\.\d+\.\d+$$'
     # Use a custom entrypoint to initialise DB + admin user (mapped below)
-    entrypoint: [ "/usr/local/bin/docker-entrypoint.sh" ]
+    entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
     environment:
       TZ: ${TZ}
       PUID: ${PUID}
       PGID: ${PGID}
       FILEBROWSER_ADMIN_USER: ${FILEBROWSER_ADMIN_USER}
-      FILEBROWSER_ADMIN_PASSWORD: ${FILEBROWSER_ADMIN_PASSWORD}
+      # FILEBROWSER_ADMIN_PASSWORD is injected by entrypoint from secret
+    secrets:
+      - filebrowser_admin_password
     volumes:
       # persistent DB/config
       - ${VOLUMES_PATH}/filebrowser/srv:/srv:rw
@@ -78,7 +89,7 @@ services:
       - ${NAVIDROME_MUSIC_PATH}:/srv/music:rw
       - ${NAVIDROME_EXTRA_LIBRARIES_PATH}:/srv/extra-libraries:rw
       # custom entrypoint script in your repo (read-only)
-      - ./configs/filebrowser-entrypoint.sh:/usr/local/bin/docker-entrypoint.sh:ro
+      - ./configs/entrypoints/filebrowser.sh:${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}:ro
     networks:
       - frontend
     restart: unless-stopped
@@ -87,3 +98,11 @@ services:
       interval: 1m
       timeout: 10s
       retries: 3
+
+secrets:
+  sftp_password:
+    file: ${SECRETS_PATH}/sftp_password
+  syncthing_gui_password:
+    file: ${SECRETS_PATH}/syncthing_gui_password
+  filebrowser_admin_password:
+    file: ${SECRETS_PATH}/filebrowser_admin_password
