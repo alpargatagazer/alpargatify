@@ -21,6 +21,9 @@ telegram-bot/data/
 # Environment files
 *.env
 
+# Secrets
+secrets/
+
 # Test configuration files
 *.test
 *.custom

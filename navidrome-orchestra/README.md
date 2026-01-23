@@ -49,7 +49,7 @@ See the comments in `bootstrap.sh` for additional variable expectations and port
 ### Dozzle (Docker Log Viewer)
 Dozzle provides a real-time web interface for viewing Docker container logs. It requires no additional credentials as it's protected by Caddy's Basic Auth layer (uses `CADDY_AUTH_USER`/`CADDY_AUTH_PASSWORD`).
 
-Access it at `dozzle.<your-domain>`. Disable with `--no-dozzle` flag.
+Access it at `logs.<your-domain>`. Disable with `--no-dozzle` flag.
 
 ## What `bootstrap.sh` does
 - Creates missing directories such as `volumes/` and your configured `NAVIDROME_MUSIC_PATH`.
