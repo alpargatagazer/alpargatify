@@ -29,7 +29,7 @@
 }
 
 # Dozzle - Docker log viewer (protected by Caddy basicauth)
-<protocol>://dozzle.<domain> {
+<protocol>://logs.<domain> {
     basicauth {
         <caddy_auth_user> <caddy_auth_password_hash>
     }
