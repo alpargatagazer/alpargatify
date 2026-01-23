@@ -14,6 +14,10 @@ class TestNavidromeIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # We need secrets to be available in the environment or secrets folder
+        from secrets_loader import get_secret
+        if not get_secret("telegram_bot_token"):
+            raise unittest.SkipTest("telegram_bot_token not found in secrets, skipping integration tests")
+            
         cls.client = NavidromeClient()
         # Initialize bot without polling - just for formatting tests
         cls.bot = TelegramBot()

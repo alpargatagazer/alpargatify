@@ -260,7 +260,7 @@ class TelegramBot:
             
             self._perform_search(message, query)
 
-        @self.bot.message_handler(func=lambda m: m.reply_to_message and "what do you want to search for?" in m.reply_to_message.text.lower())
+        @self.bot.message_handler(func=lambda m: m.reply_to_message and m.reply_to_message.text and "what do you want to search for?" in m.reply_to_message.text.lower())
         @self.authorized_only
         def handle_search_reply(message: Message):
             """
@@ -398,33 +398,8 @@ class TelegramBot:
 
         @self.bot.message_handler(commands=['recent'])
         @self.authorized_only
-        def get_recent_albums(message: Message):
-            """
-            Handle /recent command to show newly added albums.
-            """
-            logger.info(f"User {message.from_user.username} requested recent albums")
-            try:
-                # get_new_albums usually defaults to 24h, allows override
-                # We want the absolute latest 10, regardless of specific time window? 
-                # The generic method might filter by "N hours". 
-                # Let's use a large window (e.g. 30 days) ensuring we get at least some content, 
-                # then slice the top 10.
-                
-                recent = self.navidrome.get_new_albums(hours=24 * 30, force=False)
-                
-                if not recent:
-                    self.bot.reply_to(message, "📭 No albums added in the last 30 days.")
-                    return
-                
-                # Sort by 'created' DESC is already done in get_new_albums
-                top_10 = recent[:10]
-                
-                msg = self.format_album_list(top_10, "🆕 <b>Recently Added Albums:</b>")
-                self.send_message(message.chat.id, msg)
-
-            except Exception as e:
-                logger.error(f"Error fetching recent: {e}", exc_info=True)
-                self.bot.reply_to(message, f"❌ Error: {str(e)}")
+        def get_recent_albums_handler(message: Message):
+            self.get_recent_albums(message)
 
         @self.bot.callback_query_handler(func=lambda call: call.data.startswith('genre:') or call.data.startswith('year:'))
         def handle_callback(call):
@@ -605,6 +580,34 @@ class TelegramBot:
                 logger.error(f"Telegram polling crashed: {e}. Retrying in 5 seconds...", exc_info=True)
                 time.sleep(5)
 
+    def get_recent_albums(self, message: Message):
+        """
+        Handle /recent command to show newly added albums.
+        """
+        logger.info(f"User {message.from_user.username} requested recent albums")
+        try:
+            # get_new_albums usually defaults to 24h, allows override
+            # We want the absolute latest 10, regardless of specific time window? 
+            # The generic method might filter by "N hours". 
+            # Let's use a large window (e.g. 30 days) ensuring we get at least some content, 
+            # then slice the top 10.
+            
+            recent = self.navidrome.get_new_albums(hours=24 * 30, force=False)
+            
+            if not recent:
+                self.bot.reply_to(message, "📭 No albums added in the last 30 days.")
+                return
+            
+            # Sort by 'created' DESC is already done in get_new_albums
+            top_10 = recent[:10]
+            
+            msg = self.format_album_list(top_10, "🆕 <b>Recently Added Albums:</b>")
+            self.send_message(message.chat.id, msg)
+
+        except Exception as e:
+            logger.error(f"Error fetching recent: {e}", exc_info=True)
+            self.bot.reply_to(message, f"❌ Error: {str(e)}")
+
     # ========== Notification Methods ==========
 
     def send_message(self, chat_id: int, text: str, parse_mode: str = "HTML", **kwargs) -> None:
@@ -732,14 +735,14 @@ class TelegramBot:
             compilation_keywords = ["compilation", "anthology", "collection", "complete", "hits", "best of", "essentials", "box set"]
             
             for key, label in type_map.items():
-                if f" {key}" in title_lower or f"({key}" in title_lower or f"[{key}" in title_lower:
+                if f" {key}" in title_lower or f"({key}" in title_lower or f"[{key}" in title_lower or title_lower.startswith(f"{key} "):
                     detected_type = label
                     break
             
             # Additional check for compilation synonyms
             if not detected_type:
                 for word in compilation_keywords:
-                    if f" {word}" in title_lower or f"({word}" in title_lower or f"[{word}" in title_lower:
+                    if f" {word}" in title_lower or f"({word}" in title_lower or f"[{word}" in title_lower or title_lower.startswith(f"{word} "):
                         detected_type = "Compilation"
                         break
         

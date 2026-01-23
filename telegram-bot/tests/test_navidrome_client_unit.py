@@ -146,6 +146,8 @@ class TestNavidromeClientUnit(unittest.TestCase):
         
         album = self.client._fetch_album_details('alb1')
         self.assertEqual(album['total_size_bytes'], 300)
+        # Verify song list is stripped
+        self.assertNotIn('song', album)
 
     @patch('navidrome_client.NavidromeClient.sync_library')
     def test_get_albums_by_year(self, mock_sync):

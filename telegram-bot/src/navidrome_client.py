@@ -166,6 +166,8 @@ class NavidromeClient:
                 for s in album['song']:
                     total_size += s.get('size', 0)
             album['total_size_bytes'] = total_size
+            # Remove song list to save memory/disk space, as it's not used by the bot
+            album.pop('song', None)
             return album
         return None
 
@@ -244,6 +246,8 @@ class NavidromeClient:
                     for alb in data:
                         aid = alb.get('id')
                         if aid:
+                            # Strip song list from existing cache entries to ensure immediate memory relief
+                            alb.pop('song', None)
                             cached_albums[aid] = alb
             except Exception as e:
                 logger.warning(f"Cache load error: {e}. Starting fresh.")
