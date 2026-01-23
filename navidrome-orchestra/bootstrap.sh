@@ -508,9 +508,8 @@ write_secret() {
   info "  Created secret: $name"
 }
 
-# Secrets with hashes (WUD and Caddy)
+# Secrets with hashes (WUD)
 write_secret "wud_admin_password_hash" "$WUD_ADMIN_PASSWORD_HASH"
-write_secret "caddy_auth_password_hash" "$CADDY_AUTH_PASSWORD_HASH"
 
 # Plaintext secrets
 write_secret "lastfm_secret" "${LASTFM_SECRET:-}"

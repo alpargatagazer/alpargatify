@@ -17,5 +17,5 @@ if [ -n "$PASSWORD_VALUE" ]; then
   export WEB_AUTHENTICATION_PASSWORD="$PASSWORD_VALUE"
 fi
 
-# Execute the original entrypoint from jlesage/musicbrainz-picard
-exec /startapp.sh "$@"
+# Execute the original entrypoint from jlesage/musicbrainz-picard (S6-overlay init)
+exec /init "$@"

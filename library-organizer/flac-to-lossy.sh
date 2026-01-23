@@ -217,8 +217,8 @@ check_system_requirements() {
       exit 6
     fi
   elif [ "$FORMAT" = "opus" ]; then
-    if ! command -v opusenc >/dev/null 2>&1 && ! command -v ffmpeg >/dev/null 2>&1; then
-      err "Neither opusenc nor ffmpeg found. Required for Opus conversion."
+    if ! command -v opusenc >/dev/null 2>&1; then
+      err "opusenc not found. Required for Opus conversion."
       exit 6
     fi
   fi
@@ -484,12 +484,7 @@ convert_to_lossy() {
   
   local cmd=()
   if [ "$FORMAT" = "opus" ]; then
-    if command -v opusenc >/dev/null 2>&1; then
-      cmd=(opusenc "${ENCODE_ARGS[@]}" "$encode_src" "$out_file")
-    else
-      # Fallback to ffmpeg
-      cmd=(ffmpeg -i "$encode_src" -c:a libopus -b:a "${BITRATE}k" "$out_file")
-    fi
+    cmd=(opusenc "${ENCODE_ARGS[@]}" "$encode_src" "$out_file")
   else
     # AAC
     cmd=(afconvert "${ENCODE_ARGS[@]}" "$encode_src" "$out_file")

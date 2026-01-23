@@ -26,7 +26,8 @@ This folder contains the Docker Compose files, configuration templates and helpe
 This setup is intended to run on a remote server (VPS or VM). It brings up a robust music server (**Navidrome**) and a small set of microservices that help operate and observe that server: TLS routing and certificates (**Caddy**), metrics collection and dashboards (**Prometheus** + **Grafana**), container-level exporters (**node-exporter**), storage/exchange helpers (**Syncthing**, **FileBrowser**, **SFTP**), and a management UI to make sure your containers are updated (**WUD**).
 
 ## Before you begin
-- Fill in the `./.env` file located next to `bootstrap.sh`. The script requires several variables to be present (see list below).
+- **Create your environment file**: `cp .env.example .env` and fill in the values.
+- The script requires several variables to be present (see list below).
 - Install **Docker** and **Docker Compose** on the host.
 - Inspect `configs/` (particularly `Caddyfile` and `prometheus.yml`) in case you have any special needs.
 
