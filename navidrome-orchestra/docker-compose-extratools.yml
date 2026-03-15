@@ -50,7 +50,7 @@ services:
       retries: 3
 
   picard:
-    image: jlesage/musicbrainz-picard:latest
+    image: jlesage/musicbrainz-picard:v26.02.2
     profiles: [ "picard" ]
     container_name: picard
     entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
@@ -78,12 +78,11 @@ services:
     restart: unless-stopped
 
   dozzle:
-    image: amir20/dozzle:latest
+    image: amir20/dozzle:v10.1.1
     profiles: [ "dozzle" ]
     container_name: dozzle
     labels:
-      - 'wud.tag.include=latest'
-      - 'wud.watch.digest=true'
+      - 'wud.tag.include=^v\d+\.\d+\.\d+$$'
     environment:
       TZ: ${TZ}
       DOZZLE_NO_ANALYTICS: true

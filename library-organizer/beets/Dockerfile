@@ -1,13 +1,13 @@
 # docker/beets/Dockerfile
 FROM python:3.14-slim AS builder
 
-ARG BEETS_VERSION=2.5
+ARG BEETS_VERSION=2.7.1
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system deps needed for beets plugins (file, ffmpeg if needed, libmagic, buildessentials, etc.)
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-     build-essential \
+  build-essential \
   && rm -rf /var/lib/apt/lists/*
 
 # Create a venv and install pinned beets into it

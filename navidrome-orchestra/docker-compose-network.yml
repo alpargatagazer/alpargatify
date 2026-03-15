@@ -6,6 +6,7 @@ services:
     container_name: caddy
     labels:
       - 'wud.tag.include=^\d+\.\d+$$'
+      - 'wud.watch.digest=true'
     environment:
       TZ: ${TZ}
     volumes:

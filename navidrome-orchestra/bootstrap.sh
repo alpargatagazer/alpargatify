@@ -106,7 +106,8 @@ cleanup_secrets() {
 
 cleanup_all() {
   cleanup_tmpfiles
-  cleanup_secrets
+  # If we cleanup secrets, WUD will have problems when re-running services
+  # cleanup_secrets
 }
 trap cleanup_all EXIT
 

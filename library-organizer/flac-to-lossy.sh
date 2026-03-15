@@ -115,6 +115,7 @@ Flags:
   --bitrate N     bitrate in kbps (default: ${BITRATE})
   --force         overwrite existing destination files (equivalent to SKIP_EXISTING=no)
   --dry-run       show actions without running conversion (equivalent to DRY_RUN=yes)
+  -v, --verbose   enable verbose debug output (equivalent to VERBOSE=yes)
   --split-only    only split FLAC images using CUE sheets, output FLAC tracks
                   (no conversion). Tracks are placed in destination with
                   same structure as if they were converted.
@@ -155,6 +156,7 @@ parse_arguments() {
       --bitrate) BITRATE="$2"; shift 2 ;;
       --force) FORCE_FROM_CLI="yes"; shift ;;
       --dry-run) DRY_RUN="yes"; shift ;;
+      -v|--verbose) VERBOSE="yes"; shift ;;
       --split-only) SPLIT_ONLY="yes"; shift ;;
       --no-cover) COPY_COVERS="no"; shift ;;
       --keep-replaygain) STRIP_REPLAYGAIN="no"; shift ;;
@@ -610,7 +612,17 @@ split_with_xld() {
     return 1
   fi
 
-  find "$TMPD" -maxdepth 1 -type f \( -iname '*.flac' \) -print0 | while IFS= read -r -d '' trackfile; do
+  find "$TMPD" -type f \( -iname '*.flac' \) -print0 | while IFS= read -r -d '' trackfile; do
+    # Handle subdirectories created by XLD (e.g. for track titles with slashes)
+    # by flattening them into the root of TMPD with sanitized names to avoid collisions.
+    local rel_track="${trackfile#$TMPD/}"
+    if [[ "$rel_track" == */* ]]; then
+      local safe_name="${rel_track//\//_}"
+      debug "Collapsing XLD subdirectory file: $rel_track -> $safe_name"
+      mv "$trackfile" "$TMPD/$safe_name"
+      trackfile="$TMPD/$safe_name"
+    fi
+
     if [ "$SPLIT_ONLY" = "yes" ]; then copy_flac_file "$trackfile" "$destdir"
     else convert_to_lossy "$trackfile" "$destdir"; fi
   done
