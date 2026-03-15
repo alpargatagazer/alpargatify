@@ -50,7 +50,7 @@ services:
       retries: 3
 
   picard:
-    image: jlesage/musicbrainz-picard:v26.02.2
+    image: jlesage/musicbrainz-picard:v26.03.1
     profiles: [ "picard" ]
     container_name: picard
     entrypoint: [ "${CONTAINER_ENTRYPOINT_PATH:-/entrypoint.sh}" ]
