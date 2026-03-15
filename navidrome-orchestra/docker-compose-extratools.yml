@@ -77,6 +77,28 @@ services:
       - frontend
     restart: unless-stopped
 
+  metadata-remote:
+    image: ghcr.io/wow-signal-dev/metadata-remote:latest
+    profiles: [ "mdrm" ]
+    container_name: metadata-remote
+    labels:
+      - 'wud.watch.digest=true'
+    environment:
+      TZ: ${TZ}
+      PUID: ${PUID}
+      PGID: ${PGID}
+    volumes:
+      - "${NAVIDROME_MUSIC_PATH}:/music/main:rw"
+      - "${NAVIDROME_EXTRA_LIBRARIES_PATH}:/music/extra-libraries:rw"
+    networks:
+      - frontend
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "sh", "-c", "wget --quiet --tries=1 --timeout=3 -O - http://127.0.0.1:8338/ || exit 1" ]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+
   dozzle:
     image: amir20/dozzle:v10.1.1
     profiles: [ "dozzle" ]

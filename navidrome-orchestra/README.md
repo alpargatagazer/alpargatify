@@ -8,7 +8,7 @@ This folder contains the Docker Compose files, configuration templates and helpe
 - **Core**: `docker-compose-core.yml` — runs **Navidrome** and an init helper to set ownership.
 - **Monitor**: `docker-compose-monitor.yml` — runs **Prometheus**, **Grafana** and **node-exporter** for observability.
 - **Network**: `docker-compose-network.yml` — runs **Caddy** (TLS/HTTP reverse proxy).
-- **Storage / Extras**: `docker-compose-storage.yml` & `docker-compose-extratools.yml` — run **SFTP**, **Syncthing**, **FileBrowser**, **WUD** and **MusicBrainz Picard**.
+- **Storage / Extras**: `docker-compose-storage.yml` & `docker-compose-extratools.yml` — run **SFTP**, **Syncthing**, **FileBrowser**, **WUD**, **MusicBrainz Picard** and **Metadata Remote**.
 - **Bootstrap helper**: `bootstrap.sh` — prepares directories, renders config templates, validates environment and launches the composed services.
 - **Library creation helper**: `new-library.sh` — creates a new Navidrome library and FileBrowser user for isolated user access.
 
@@ -21,6 +21,7 @@ This folder contains the Docker Compose files, configuration templates and helpe
 - **Syncthing**, **FileBrowser**, **SFTP**: optional storage and access helpers.
 - **WUD**: web UI that can trigger compose actions (optional, profile-enabled).
 - **MusicBrainz Picard**: music tagger and organizer (optional, profile-enabled).
+- **Metadata Remote (mdrm)**: web-based metadata editor for audio files on headless servers.
 
 ## What this is for
 This setup is intended to run on a remote server (VPS or VM). It brings up a robust music server (**Navidrome**) and a small set of microservices that help operate and observe that server: TLS routing and certificates (**Caddy**), metrics collection and dashboards (**Prometheus** + **Grafana**), container-level exporters (**node-exporter**), storage/exchange helpers (**Syncthing**, **FileBrowser**, **SFTP**), and a management UI to make sure your containers are updated (**WUD**).
@@ -86,6 +87,7 @@ chmod +x ./bootstrap.sh
 ./bootstrap.sh --no-monitoring  	# disable the monitoring profile (Prometheus/Grafana/exports)
 ./bootstrap.sh --no-extra-storage	# disable extra storage services (Syncthing/FileBrowser)
 ./bootstrap.sh --no-picard      	# disable MusicBrainz Picard
+./bootstrap.sh --no-mdrm        	# disable Metadata Remote
 ./bootstrap.sh --prod     			# run in production mode (Caddy uses https in templates)
 ```
 
@@ -95,6 +97,7 @@ Flags explained:
 - `--no-extra-storage`: disable the `extra-storage` profile (disables `syncthing` and `filebrowser`).
 - `--no-monitoring`: disable the `monitoring` profile (disables Prometheus, Grafana, exporters).
 - `--no-picard`: disable the `picard` profile (disables MusicBrainz Picard).
+- `--no-mdrm`: disable the `mdrm` profile (disables Metadata Remote).
 - `--prod`: tells template rendering to use production behavior (sets `PROTOCOL=https` for templates/Caddy).
 - `-h|--help`: prints usage and exits.
 
@@ -113,6 +116,7 @@ Implementation notes about profiles:
 - **FileBrowser** (`docker-compose-storage.yml`, profile `extra-storage`): web UI for browsing and managing files inside the music folder. Accessible via web UI at `filebrowser.<domain>`.
 - **WUD** (`docker-compose-extratools.yml`, profile `wud`): optional management web UI that can trigger docker-compose actions based on the bundled compose files. Useful for remote triggers and scheduled actions — keep it disabled if you do not want remote-trigger abilities. Accessible via web UI at `wud.<domain>`.
 - **MusicBrainz Picard** (`docker-compose-extratools.yml`, profile `picard`): optional music tagger and organizer. Accessible via web UI at `picard.<domain>`.
+- **Metadata Remote** (`docker-compose-extratools.yml`, profile `mdrm`): web-based audio metadata editor — edit tags, album art, and file names directly on the server via a browser. No internal authentication; protected by Caddy Basic Auth. Accessible via web UI at `mdrm.<domain>`.
 
 ## Safety and secrets
 - `bootstrap.sh` validates presence of required secrets in `.env` and will refuse to run or warn when critical secrets are missing for enabled profiles.

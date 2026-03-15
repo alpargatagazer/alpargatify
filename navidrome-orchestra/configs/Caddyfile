@@ -70,6 +70,16 @@
     }
 }
 
+# Metadata Remote - metadata editor (protected by Caddy basicauth, no internal auth)
+<protocol>://mdrm.<domain> {
+    basicauth {
+        <caddy_auth_user> <caddy_auth_password_hash>
+    }
+    route {
+        reverse_proxy metadata-remote:8338
+    }
+}
+
 # Internal monitoring endpoints - do NOT expose to the internet
 <protocol>://prometheus.<domain> {
     @allowed client_ip 127.0.0.1 172.16.0.0/8 192.168.0.0/16
