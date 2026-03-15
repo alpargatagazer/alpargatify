@@ -433,13 +433,20 @@ class NavidromeClient:
         
         for album in all_albums:
             release_date = None
-            # Prioritize 'releaseDate' which comes from getAlbum detailed view
-            possible_keys = ['releaseDate', 'date', 'originalDate', 'published']
+            # Prioritize properties that contain full dates. OPUS files often have only year in 'releaseDate'.
+            possible_keys = ['originalReleaseDate', 'releaseDate', 'date', 'originalDate', 'published']
             for k in possible_keys:
                 if k in album and album[k]:
-                    release_date = album[k]
-                    break
+                    val = album[k]
+                    # We need a precise date (month + day) or a string long enough to parse
+                    if isinstance(val, dict) and val.get('month') and val.get('day'):
+                        release_date = val
+                        break
+                    elif isinstance(val, str) and len(str(val)) >= 10:
+                        release_date = val
+                        break
             
+            # If we couldn't find a precise date, this album won't match an anniversary
             if release_date:
                 try:
                     # Case 1: releaseDate is a Dictionary (Navidrome getAlbum format)

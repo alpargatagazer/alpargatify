@@ -50,8 +50,8 @@ class TestNavidromeIntegration(unittest.TestCase):
         self.assertIsInstance(new_albums, list)
         
         # Test anniversary (use fixed date if possible or just check call)
-        # We are using here September 22 because we know an album is released that day
-        anniversaries = self.client.get_anniversary_albums(22, 9)
+        # We are using here June 6 because we know an album is released that day in the OPUS cache
+        anniversaries = self.client.get_anniversary_albums(6, 6)
         self.assertIsInstance(anniversaries, list)
 
     def test_library_scan_status(self):
