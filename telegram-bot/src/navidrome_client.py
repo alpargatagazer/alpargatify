@@ -172,6 +172,38 @@ class NavidromeClient:
             return album
         return None
 
+    def get_artist(self, artist_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch detailed information for a single artist.
+        
+        :param artist_id: The unique artist ID.
+        :return: Artist dictionary or None if fetch fails.
+        """
+        response = self._request('getArtist', {'id': artist_id})
+        if response and 'artist' in response:
+            return response['artist']
+        return None
+
+    def get_artist_genres(self, artist_id: str) -> List[str]:
+        """
+        Derive genres for an artist by inspecting their albums.
+        
+        :param artist_id: The unique artist ID.
+        :return: List of unique genre names.
+        """
+        artist = self.get_artist(artist_id)
+        if not artist:
+            return []
+        
+        genres = set()
+        albums = artist.get('album', [])
+        for album in albums:
+            genre = album.get('genre')
+            if genre:
+                genres.add(genre)
+                
+        return sorted(list(genres))
+
     def sync_library(self, force: bool = False) -> List[Dict[str, Any]]:
         """
         Synchronize the album library with incremental enrichment and expiry rotation.
@@ -801,6 +833,16 @@ class NavidromeClient:
         url = f"{self._base_url}/rest/getCoverArt?{query_string}"
         return url
 
+    def get_artist_image_url(self, artist_id: str) -> Optional[str]:
+        """
+        Generate an authenticated URL for artist image.
+        Navidrome uses getCoverArt endpoint for artist images too.
+        
+        :param artist_id: Artist ID
+        :return: Full URL to artist image or None
+        """
+        return self.get_cover_art_url(artist_id)
+
     def get_cover_art_bytes(self, cover_id: str) -> Optional[bytes]:
         """
         Download album cover art as binary data.
@@ -823,4 +865,99 @@ class NavidromeClient:
             return response.content
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to download cover art: {e}")
+            return None
+
+    @classmethod
+    def from_credentials(cls, base_url: str, username: str, password: str) -> 'NavidromeClient':
+        """
+        Factory method to create a NavidromeClient with explicit credentials
+        instead of reading from Docker secrets.
+
+        :param base_url: Navidrome server URL.
+        :param username: Navidrome username.
+        :param password: Navidrome password.
+        :return: Configured NavidromeClient instance.
+        """
+        instance = cls.__new__(cls)
+        instance._base_url = base_url.rstrip('/') if base_url else None
+        instance._username = username
+        instance._password = password
+        instance._client_name = "telegram-bot"
+        instance._api_version = os.environ.get("NAVIDROME_API_VERSION", "1.16.1")
+        instance._music_folder_name = os.environ.get("NAVIDROME_MUSIC_FOLDER", "Music Library")
+        instance._music_folder_id = None
+        instance._scan_meta_file = '/app/data/scan_status.json'
+
+        # Setup session with retries
+        instance.session = requests.Session()
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        instance.session.mount("http://", adapter)
+        instance.session.mount("https://", adapter)
+        instance.timeout = 30
+
+        return instance
+
+    def get_starred(self) -> Optional[Dict[str, List[Dict[str, Any]]]]:
+        """
+        Fetch starred (favorite) songs, albums, and artists for the authenticated user.
+        Uses the getStarred2 endpoint (ID3-based).
+
+        :return: Dictionary with keys 'song', 'album', 'artist', each containing
+                 a list of item dicts. Returns None on failure.
+        """
+        response = self._request('getStarred2')
+        if not response or 'starred2' not in response:
+            return None
+
+        starred = response['starred2']
+        return {
+            'song': starred.get('song', []),
+            'album': starred.get('album', []),
+            'artist': starred.get('artist', [])
+        }
+
+    def get_user_last_login(self, username: str) -> Optional[datetime.datetime]:
+        """
+        Check when a user last logged into Navidrome using the Native API.
+        Requires admin credentials on this client instance.
+
+        :param username: The Navidrome username to check.
+        :return: datetime of last login, or None if user not found.
+        """
+        if not self._base_url:
+            return None
+
+        url = f"{self._base_url}/api/user"
+        try:
+            # Navidrome Native API uses HTTP Basic Auth
+            response = self.session.get(
+                url,
+                auth=(self._username, self._password),
+                params={'_end': 100, '_order': 'ASC', '_sort': 'userName', '_start': 0},
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            users = response.json()
+
+            for user in users:
+                if user.get('userName') == username:
+                    last_login_str = user.get('lastLoginAt')
+                    if last_login_str:
+                        # Parse ISO 8601 format
+                        if last_login_str.endswith('Z'):
+                            last_login_str = last_login_str[:-1] + '+00:00'
+                        return datetime.datetime.fromisoformat(last_login_str)
+                    return None
+
+            logger.debug(f"User '{username}' not found in Navidrome.")
+            return None
+
+        except Exception as e:
+            logger.warning(f"Error checking last login for '{username}': {e}")
             return None

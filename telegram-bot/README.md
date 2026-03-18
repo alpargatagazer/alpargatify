@@ -17,8 +17,17 @@ Chat with your bot to explore your library:
 - `/random` - Get a random album suggestion with cover art
 - `/nowplaying` - Real-time playback for the authenticated bot user
 - `/genres` - Browse genres and get random albums
+- `/recommend` - Get music recommendations from other users (via their favorites)
 - `/stats` - View library statistics (albums, artists, songs)
 - `/help` - Display available commands
+
+### 🔒 Secure Credential Management (DM Only)
+The `/recommend` command relies on other users' Navidrome favorites. Since the API requires user credentials to fetch favorites, users must securely log in with the bot.
+
+To ensure your password is never exposed in the group chat, the **`/login` command only works in Direct Messages (DM)** with the bot. 
+1. Send the bot a DM: `/login <your_username> <your_password>`
+2. The bot instantly **deletes your message** so your password is not left in the chat history.
+3. Your credentials are encrypted via AES-256-GCM and stored locally in the bot's secure SQLite database.
 
 ### Key Technical Features
 - **Group Authorization**: Bot only responds to commands from the authorized group chat - no individual user management needed
@@ -38,10 +47,11 @@ Create a `secrets/` directory in the project root with these files (plain text, 
 | File | Content | Example |
 |------|---------|---------|
 | `navidrome_url.txt` | Your Navidrome server URL | `https://music.example.com` |
-| `navidrome_user.txt` | Your Navidrome username | `admin` |
-| `navidrome_password.txt` | Your Navidrome password | `mypassword` |
+| `navidrome_user.txt` | Your Navidrome username (admin) | `admin` |
+| `navidrome_password.txt` | Your Navidrome password (admin) | `mypassword` |
 | `telegram_bot_token.txt` | Token from [@BotFather](https://t.me/botfather) | `123456789:ABCdef...` |
 | `telegram_chat_id.txt` | **Group chat ID(s)** for notifications and authorization | `-1001234567890` or `-1001111111,-1002222222` |
+| `credentials_encryption_key.txt` | 32-byte (64 hex char) AES key | Generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
 
 **How to get your Group Chat ID:**
 1. Add your bot to your Telegram group
@@ -70,9 +80,9 @@ docker-compose up -d
 ```
 
 The bot will:
-1. Start both the scheduler thread (for daily notifications) and polling thread (for interactive commands)
-2. Cache your library in `data/albums_cache.json` for fast subsequent runs
-3. Listen for commands from authorized users only
+1. Start the scheduler thread (for daily notifications and the daily inactive-user purge)
+2. Start the bot polling thread (for interactive commands)
+3. Listen for commands from authorized users only (or DMs for login)
 
 ### 4. BotFather Configuration (Recommended)
 To improve user experience, you can register the commands with [@BotFather](https://t.me/botfather) so they appear in the auto-complete menu.
@@ -88,6 +98,7 @@ random - Send a random album from Navidrome
 search - Search albums by artist or name
 nowplaying - What are users listening to right now?
 genres - Pick a genre and I'll show albums within it
+recommend - Get music recommendations based on other users' favorites
 ```
 
 ### 5. Verify It's Running
