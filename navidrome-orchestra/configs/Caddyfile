@@ -14,7 +14,9 @@
 }
 
 <protocol>://<domain> {
-    reverse_proxy navidrome:4533
+    reverse_proxy navidrome:4533 {
+        flush_interval -1
+    }
 }
 
 <protocol>://<domain>:4533 {
@@ -34,7 +36,9 @@
         <caddy_auth_user> <caddy_auth_password_hash>
     }
     route {
-        reverse_proxy dozzle:8080
+        reverse_proxy dozzle:8080 {
+            flush_interval -1
+        }
     }
 }
 
@@ -63,6 +67,16 @@
                 tls_insecure_skip_verify
             }
         }
+    }
+}
+
+# Metadata Remote - metadata editor (protected by Caddy basicauth, no internal auth)
+<protocol>://mdrm.<domain> {
+    basicauth {
+        <caddy_auth_user> <caddy_auth_password_hash>
+    }
+    route {
+        reverse_proxy metadata-remote:8338
     }
 }
 

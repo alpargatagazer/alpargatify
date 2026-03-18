@@ -22,6 +22,7 @@ services:
       - navidrome_password
       - telegram_bot_token
       - telegram_chat_id
+      - credentials_encryption_key
 
   init-chown:
     image: alpine:latest
@@ -43,3 +44,5 @@ secrets:
     file: ./secrets/telegram_bot_token.txt
   telegram_chat_id:
     file: ./secrets/telegram_chat_id.txt
+  credentials_encryption_key:
+    file: ./secrets/credentials_encryption_key.txt

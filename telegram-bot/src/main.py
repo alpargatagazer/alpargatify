@@ -9,6 +9,8 @@ import schedule
 
 from navidrome_client import NavidromeClient
 from telegram_bot import TelegramBot
+import user_activity
+import credentials_db
 
 # Configure Logging
 log_level_str: str = os.environ.get("LOGGING", "INFO").upper()
@@ -70,29 +72,26 @@ def daily_job() -> None:
 
     logger.info("Daily check completed.")
 
-# NOTE: The weekly top report is currently disabled as Navidrome API 
-# doesn't support global stats for all users. Preserving code for future use.
-# def weekly_job() -> None:
-#     """
-#     Scheduled job that shows the top 10 albums of the week.
-#     """
-#     logger.info(f"Starting Sunday weekly top report at {datetime.datetime.now()}")
-#     
-#     client = NavidromeClient()
-#     try:
-#         top_albums = client.get_top_albums_from_history(days=7, limit=10)
-#         if top_albums:
-#             msg = f"🏆 <b>Weekly Top 10 Albums</b>\n(Albums most played in the last 7 days)\n\n"
-#             for i, alb in enumerate(top_albums, 1):
-#                 msg += f"{i}. <b>{alb.get('name')}</b> - {alb.get('artist')} ({alb.get('playCount')} plays)\n"
-#             
-#             bot_instance.send_notification(msg, parse_mode="HTML")
-#         else:
-#             logger.info("No playback history found for the weekly report.")
-#     except Exception as e:
-#         logger.error(f"Error in Sunday report: {e}", exc_info=True)
-#     
-#     logger.info("Sunday check completed.")
+
+def purge_inactive_users_job() -> None:
+    """
+    Scheduled job that purges users who haven't logged into Navidrome
+    in over 30 days from the credentials database.
+    """
+    logger.info("Starting inactive user purge check...")
+    try:
+        admin_client = NavidromeClient()
+        purged = user_activity.purge_inactive_users(admin_client, max_days=30)
+        if purged:
+            logger.info(f"Purged {len(purged)} inactive user(s): {', '.join(purged)}")
+        else:
+            logger.info("No inactive users to purge.")
+    except Exception as e:
+        logger.error(f"Error during user purge: {e}", exc_info=True)
+
+
+    logger.info("Sunday check completed.")
+
 
 def run_scheduler():
     """
@@ -109,9 +108,9 @@ def run_scheduler():
     logger.info(f"Scheduling daily job at {schedule_time}")
     schedule.every().day.at(schedule_time).do(daily_job)
     
-    # Weekly Sunday report (Disabled: Navidrome API doesn't support global history)
-    # logger.info("Scheduling weekly Sunday report at 12:00")
-    # schedule.every().sunday.at("12:00").do(weekly_job)
+    # Schedule inactive user purge (daily at 04:00)
+    logger.info("Scheduling daily inactive user purge at 04:00")
+    schedule.every().day.at("04:00").do(purge_inactive_users_job)
     
     while True:
         schedule.run_pending()
@@ -130,11 +129,18 @@ def run_bot_polling():
 
 def main() -> None:
     """
-    Main entrypoint for the application. Runs both scheduler and bot polling concurrently.
+    Main entrypoint for the application. Runs scheduler and bot polling concurrently.
     """
     global bot_instance
     
     logger.info("Navidrome Telegram Bot Starting...")
+    
+    # Initialize the database to ensure tables exist
+    try:
+        credentials_db.init_db()
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}", exc_info=True)
+        sys.exit(1)
     
     # Initialize single bot instance shared by both threads
     bot_instance = TelegramBot()
@@ -143,11 +149,11 @@ def main() -> None:
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True, name="Scheduler")
     bot_thread = threading.Thread(target=run_bot_polling, daemon=True, name="BotPolling")
     
-    # Start both threads
+    # Start all threads
     scheduler_thread.start()
     bot_thread.start()
     
-    logger.info("Both scheduler and bot polling threads started")
+    logger.info("All threads started (scheduler, bot polling)")
     
     # Keep main thread alive
     try:

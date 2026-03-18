@@ -1,4 +1,4 @@
-import datetime
+import threading
 import logging
 import math
 import re
@@ -7,8 +7,10 @@ from functools import wraps
 from typing import Optional, List, Dict
 
 import telebot
-from telebot.types import Message
+from telebot.types import Message, InputMediaPhoto
 
+import credentials_db
+import user_activity
 from navidrome_client import NavidromeClient
 from secrets_loader import get_secret
 import requests
@@ -32,6 +34,7 @@ class TelegramBot:
         if not token:
             raise ValueError("telegram_bot_token not found in secrets")
         
+        self.authorized_users_cache = {}  # user_id -> (is_authorized, timestamp)
         self.bot = telebot.TeleBot(token)
         
         # Configure global retries for Telegram API interactions
@@ -68,45 +71,99 @@ class TelegramBot:
         self._register_handlers()
     
     
-    def _is_authorized(self, chat_id: int) -> bool:
+    def _is_authorized(self, message: Message) -> bool:
         """
         Check if a command comes from an authorized chat.
+        Handle private chats by checking membership in authorized groups.
         
-        :param chat_id: Telegram chat ID to check.
-        :return: True if the chat is authorized, False otherwise.
+        :param message: Telegram message object.
+        :return: True if the chat/user is authorized, False otherwise.
         """
         if not self.authorized_chat_ids:
             return False
         
-        # Convert chat_id to string for comparison (can be negative for groups)
-        chat_id_str = str(chat_id)
+        # 1. Direct match with authorized groups
+        chat_id_str = str(message.chat.id)
         if chat_id_str in self.authorized_chat_ids:
             return True
-        else:
-            logger.warning(f"Unauthorized access attempt from chat ID: {chat_id}")
-            return False
-    
-    def authorized_only(self, func):
-        """
-        Decorator to restrict command access to authorized group chats only.
+        
+        # 2. For private chats, we must check if the user belongs to one of the authorized groups.
+        # However, bots cannot arbitrarily query get_chat_member for any user ID unless the bot 
+        # has seen the user in the group or the user has interacted with the bot.
+        if message.chat.type == 'private':
+            user_id = message.from_user.id
+            now = time.time()
+            
+            # Check cache (1 hour TTL)
+            if user_id in self.authorized_users_cache:
+                is_auth, last_check = self.authorized_users_cache[user_id]
+                if now - last_check < 3600:
+                    return is_auth
+            
+            # Not in cache or expired, check membership
+            is_member = False
+            for group_id in self.authorized_chat_ids:
+                try:
+                    chat_member = self.bot.get_chat_member(group_id, user_id)
+                    # chat_member.status can be 'creator', 'administrator', 'member', 'restricted', 'left', 'kicked'
+                    if chat_member.status in ['creator', 'administrator', 'member', 'restricted']:
+                        is_member = True
+                        break
+                except Exception as e:
+                    # Log at debug to avoid spam, usually means user not found or bot not in group
+                    logger.debug(f"Failed to check membership for user {user_id} in {group_id}: {e}")
+                    continue
+            
+            # Cache results
+            self.authorized_users_cache[user_id] = (is_member, now)
+            
+            if is_member:
+                return True
+            else:
+                logger.warning(f"Unauthorized DM attempt from user: {message.from_user.username} ({user_id}). Bot may not know them yet.")
+                self.bot.reply_to(
+                    message, 
+                    "⛔ Sorry, I can only interact with members of authorized groups.\n\n"
+                    "*Tip*: If you are in the group, try sending any message in the group first so I can re-sync my user list, then try sending me a DM again.",
+                    parse_mode="Markdown"
+                )
+                return False
 
-        :param func: The function to be decorated.
+        logger.warning(f"Unauthorized access attempt from chat ID: {message.chat.id} ({message.chat.type})")
+        return False
+    
+    def authorized_only(self, allow_dms=False):
+        """
+        Decorator to restrict command access to authorized group chats.
+        Optionally allows access via private DMs if the user is a group member.
+
+        :param allow_dms: If True, authorized group members can use this command in private DMs.
         :return: The decorated function.
         """
-        @wraps(func)
-        def wrapper(message: Message):
-            if not self._is_authorized(message.chat.id):
-                self.bot.reply_to(message, "⛔ This bot is only available in the authorized group.")
-                return
-            return func(message)
-        return wrapper
+        def decorator(func):
+            @wraps(func)
+            def wrapper(message: Message, *args, **kwargs):
+                if not self._is_authorized(message):
+                    # _is_authorized already sends a reply for DMs, so only reply broadly here for groups if needed
+                    if message.chat.type != 'private':
+                        self.bot.reply_to(message, "⛔ This bot is only available for authorized groups.")
+                    return
+                
+                # Check DM restriction
+                if message.chat.type == 'private' and not allow_dms:
+                    self.bot.reply_to(message, "⚠️ This command can only be used in the group chat, not in private messages.")
+                    return
+                    
+                return func(message, *args, **kwargs)
+            return wrapper
+        return decorator
     
     def _register_handlers(self):
         """
         Register all Telegram message and callback handlers.
         """
         @self.bot.message_handler(commands=['start', 'help'])
-        @self.authorized_only
+        @self.authorized_only(allow_dms=True)
         def send_welcome(message: Message):
             """
             Handle /start and /help commands.
@@ -122,15 +179,17 @@ class TelegramBot:
                 "• /recent - Show recently added albums\n"
                 "• /nowplaying - Show who is listening to what\n"
                 "• /genres - Browse albums by genre\n"
+                "• /recommend - Get music recommendations from other users\n"
                 "• /stats - Show server statistics\n"
                 "• /help - Show this message\n\n"
-                "⚠️ Note: /top command is currently disabled due to Navidrome API limitations."
+                "🔒 *Private Commands (DM only)*:\n"
+                "• /login <user> <pass> - Store credentials to share your favorites\n"
             )
             self.bot.reply_to(message, help_text, parse_mode="Markdown")
             logger.info(f"User {message.from_user.username} requested help")
         
         @self.bot.message_handler(commands=['stats'])
-        @self.authorized_only
+        @self.authorized_only(allow_dms=False)
         def get_stats(message: Message):
             """
             Handle /stats command to show library statistics.
@@ -162,7 +221,7 @@ class TelegramBot:
                 self.bot.reply_to(message, f"❌ Error: {str(e)}")
         
         @self.bot.message_handler(commands=['random'])
-        @self.authorized_only
+        @self.authorized_only(allow_dms=False)
         def get_random_album(message: Message):
             """
             Handle /random command to suggest a random album from the library.
@@ -230,7 +289,7 @@ class TelegramBot:
                 self.bot.reply_to(message, f"❌ Error: {str(e)}")
         
         @self.bot.message_handler(commands=['search'])
-        @self.authorized_only
+        @self.authorized_only(allow_dms=False)
         def search_music(message: Message):
             """
             Handle /search <query> command to find albums by artist or title.
@@ -260,8 +319,8 @@ class TelegramBot:
             
             self._perform_search(message, query)
 
-        @self.bot.message_handler(func=lambda m: m.reply_to_message and "what do you want to search for?" in m.reply_to_message.text.lower())
-        @self.authorized_only
+        @self.bot.message_handler(func=lambda m: m.reply_to_message and m.reply_to_message.text and "what do you want to search for?" in m.reply_to_message.text.lower())
+        @self.authorized_only(allow_dms=False)
         def handle_search_reply(message: Message):
             """
             Handle the reply to the ForceReply search prompt.
@@ -272,7 +331,7 @@ class TelegramBot:
 
 
         @self.bot.message_handler(commands=['nowplaying'])
-        @self.authorized_only
+        @self.authorized_only(allow_dms=False)
         def now_playing(message: Message):
             """
             Handle /nowplaying command to show real-time playback.
@@ -309,25 +368,15 @@ class TelegramBot:
 
         # NOTE: /top command is preserved but disabled (Navidrome doesn't support global history)
         # @self.bot.message_handler(commands=['top'])
-        # @self.authorized_only
+        # @self.authorized_only(allow_dms=False)
         # def top_albums_start(message: Message):
         #     """
-        #     Handle /top command to show the period selection menu.
+        #     Handle /top command to show the global top albums.
         #     """
-        #     from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-        #     markup = InlineKeyboardMarkup()
-        #     markup.row(
-        #         InlineKeyboardButton("1 Day", callback_data="top:1"),
-        #         InlineKeyboardButton("3 Days", callback_data="top:3")
-        #     )
-        #     markup.row(
-        #         InlineKeyboardButton("7 Days", callback_data="top:7"),
-        #         InlineKeyboardButton("30 Days", callback_data="top:30")
-        #     )
-        #     self.bot.send_message(message.chat.id, "📊 Select the period for the Top 10 albums:", reply_markup=markup)
+        #     pass
 
         @self.bot.message_handler(commands=['genres'])
-        @self.authorized_only
+        @self.authorized_only(allow_dms=False)
         def list_genres(message: Message):
             """
             Handle /genres command to list available genres.
@@ -356,7 +405,7 @@ class TelegramBot:
 
     
         @self.bot.message_handler(commands=['year'])
-        @self.authorized_only
+        @self.authorized_only(allow_dms=False)
         def filter_by_year(message: Message):
             """
             Handle /year command.
@@ -397,34 +446,148 @@ class TelegramBot:
 
 
         @self.bot.message_handler(commands=['recent'])
-        @self.authorized_only
-        def get_recent_albums(message: Message):
+        @self.authorized_only(allow_dms=False)
+        def get_recent_albums_handler(message: Message):
+            self.get_recent_albums(message)
+
+        @self.bot.message_handler(commands=['recommend'])
+        @self.authorized_only(allow_dms=False)
+        def recommend_start(message: Message):
             """
-            Handle /recent command to show newly added albums.
+            Handle /recommend command. Shows type selection menu.
             """
-            logger.info(f"User {message.from_user.username} requested recent albums")
+            logger.info(f"User {message.from_user.username} requested recommendations")
+            from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+            markup = InlineKeyboardMarkup(row_width=3)
+            markup.add(
+                InlineKeyboardButton("🎵 Songs (20)", callback_data="rec_type:song"),
+                InlineKeyboardButton("💿 Albums (10)", callback_data="rec_type:album"),
+                InlineKeyboardButton("👤 Artists (5)", callback_data="rec_type:artist")
+            )
+            self.bot.send_message(
+                message.chat.id,
+                "🎯 <b>Recommendations</b>\n\nWhat type of recommendations do you want?",
+                reply_markup=markup,
+                parse_mode="HTML"
+            )
+
+        @self.bot.callback_query_handler(func=lambda call: call.data.startswith('rec_type:'))
+        def handle_rec_type(call):
+            """Handle recommendation type selection -> show user selection."""
+            item_type = call.data.split(':')[1]
+            self.bot.answer_callback_query(call.id, "Validating active users...")
+
+            base_url = self.navidrome._base_url or ""
+            users = user_activity.validate_and_get_users(base_url)
+            if not users:
+                self.bot.edit_message_text(
+                    "⚠️ No users have registered yet. To share your favorites, "
+                    "send me a private message (DM) with: \n`/login username password`",
+                    call.message.chat.id, call.message.message_id, parse_mode="Markdown"
+                )
+                return
+
+            from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+            markup = InlineKeyboardMarkup(row_width=2)
+            markup.add(InlineKeyboardButton("🎲 Random", callback_data=f"rec_user:{item_type}:__random__"))
+            for user in users:
+                markup.add(InlineKeyboardButton(f"👤 {user}", callback_data=f"rec_user:{item_type}:{user}"))
+
+            type_labels = {'song': 'songs', 'album': 'albums', 'artist': 'artists'}
+            self.bot.edit_message_text(
+                f"🎯 <b>{type_labels.get(item_type, item_type).capitalize()} Recommendations</b>\n\n"
+                f"Whose recommendations would you like to get?",
+                call.message.chat.id, call.message.message_id,
+                reply_markup=markup,
+                parse_mode="HTML"
+            )
+
+        @self.bot.callback_query_handler(func=lambda call: call.data.startswith('rec_user:'))
+        def handle_rec_user(call):
+            """Handle recommendation user selection -> fetch and display."""
+            parts = call.data.split(':', 2)
+            item_type = parts[1]
+            chosen_user = parts[2]
+            self.bot.answer_callback_query(call.id, "⏳ Fetching recommendations...")
+
+            # Delete the menu
+            self.bot.delete_message(call.message.chat.id, call.message.message_id)
+
+            limits = {'song': 20, 'album': 10, 'artist': 5}
+            limit = limits.get(item_type, 10)
+            base_url = self.navidrome._base_url or ""
+
             try:
-                # get_new_albums usually defaults to 24h, allows override
-                # We want the absolute latest 10, regardless of specific time window? 
-                # The generic method might filter by "N hours". 
-                # Let's use a large window (e.g. 30 days) ensuring we get at least some content, 
-                # then slice the top 10.
-                
-                recent = self.navidrome.get_new_albums(hours=24 * 30, force=False)
-                
-                if not recent:
-                    self.bot.reply_to(message, "📭 No albums added in the last 30 days.")
+                if chosen_user == '__random__':
+                    result = user_activity.get_random_user_recommendations(
+                        item_type, limit, base_url
+                    )
+                    if not result or not result.get('items'):
+                        self.send_message(call.message.chat.id,
+                            "❌ No favorites found for any user.")
+                        return
+                    source_user = result['username']
+                    items = result['items']
+                else:
+                    items = user_activity.get_recommendations(
+                        chosen_user, item_type, limit, base_url
+                    )
+                    source_user = chosen_user
+                    if items is None:
+                        self.send_message(call.message.chat.id,
+                            f"❌ Could not get favorites for {chosen_user}.")
+                        return
+
+                if not items:
+                    self.send_message(call.message.chat.id,
+                        f"📭 {source_user} has no favorites of this type.")
                     return
-                
-                # Sort by 'created' DESC is already done in get_new_albums
-                top_10 = recent[:10]
-                
-                msg = self.format_album_list(top_10, "🆕 <b>Recently Added Albums:</b>")
-                self.send_message(message.chat.id, msg)
+
+                self._format_and_send_recommendations(
+                    call.message.chat.id, source_user, item_type, items
+                )
 
             except Exception as e:
-                logger.error(f"Error fetching recent: {e}", exc_info=True)
-                self.bot.reply_to(message, f"❌ Error: {str(e)}")
+                logger.error(f"Error fetching recommendations: {e}", exc_info=True)
+                self.send_message(call.message.chat.id, f"❌ Error: {str(e)}")
+
+        @self.bot.message_handler(commands=['login'])
+        @self.authorized_only(allow_dms=True)
+        def handle_login(message: Message):
+            """
+            Handle /login command in DMs only.
+            Supports both "/login user pass" and interactive step-by-step mode.
+            """
+            if message.chat.type != 'private':
+                self.send_message(
+                    message.chat.id, 
+                    "⚠️ The `/login` command can only be used in private messages (DM) with me for security."
+                )
+                return
+
+            parts = message.text.split(' ', 2)
+            
+            # Case 1: Credentials provided in the command line
+            if len(parts) >= 3:
+                # Delete the message as quickly as possible to hide the password
+                try:
+                    self.bot.delete_message(message.chat.id, message.message_id)
+                except Exception as e:
+                    logger.warning(f"Failed to delete /login message: {e}")
+                
+                username = parts[1].strip()
+                password = parts[2].strip()
+                
+                if not username or not password:
+                    self.send_message(message.chat.id, "❌ Username and password cannot be blank.")
+                    return
+                
+                self._process_login(message, username, password)
+                return
+
+            # Case 2: Interactive login
+            msg = self.bot.send_message(message.chat.id, "👤 Please enter your Navidrome **username**:", parse_mode="Markdown")
+            self.bot.register_next_step_handler(msg, self._login_step_get_username)
 
         @self.bot.callback_query_handler(func=lambda call: call.data.startswith('genre:') or call.data.startswith('year:'))
         def handle_callback(call):
@@ -449,7 +612,7 @@ class TelegramBot:
                 msg = self.format_album_list(albums, intro)
                 if msg:
                     self.bot.delete_message(call.message.chat.id, call.message.message_id)
-                    self.send_message(call.message.chat.id, msg)
+                    self.send_message(call.message.chat.id, msg, parse_mode="HTML")
             
             elif call.data.startswith('year:'):
                 arg = call.data.split(':')[1]
@@ -458,7 +621,216 @@ class TelegramBot:
                 # Delete the menu message
                 self.bot.delete_message(call.message.chat.id, call.message.message_id)
                 self._process_year_request(call.message.chat.id, arg)
+
+    # --- Login Step Handlers (Class Methods) ---
+
+    def _login_step_get_username(self, message: Message):
+        """Interactive login: Get username step."""
+        username = message.text.strip()
+        if not username:
+            msg = self.bot.reply_to(message, "❌ Username cannot be blank. Please try again:")
+            self.bot.register_next_step_handler(msg, self._login_step_get_username)
+            return
+            
+        msg = self.bot.send_message(message.chat.id, "🔑 Now enter your **password**:", parse_mode="Markdown")
+        self.bot.register_next_step_handler(msg, self._login_step_get_password, username)
+
+    def _login_step_get_password(self, message: Message, username: str):
+        """Interactive login: Get password step."""
+        # Delete the password message immediately
+        try:
+            self.bot.delete_message(message.chat.id, message.message_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete password message in interactive flow: {e}")
+
+        password = message.text.strip()
+        if not password:
+            msg = self.bot.send_message(message.chat.id, "❌ Password cannot be blank. Please try again:")
+            self.bot.register_next_step_handler(msg, self._login_step_get_password, username)
+            return
+
+        self._process_login(message, username, password)
+
+    def _process_login(self, message: Message, username: str, password: str):
+        """
+        Shared logic to validate credentials, store them, and start initial sync.
+        """
+        bot_msg = self.bot.send_message(message.chat.id, "⏳ Verifying credentials with Navidrome...")
+        
+        base_url = self.navidrome._base_url or ""
+        if not base_url:
+            self.bot.edit_message_text("❌ Error: Navidrome URL not configured.", message.chat.id, bot_msg.message_id)
+            return
+
+        try:
+            # Validate credentials using a ping request
+            client = NavidromeClient.from_credentials(base_url, username, password)
+            response = client._request('ping')
+            
+            if not response or response.get('status') != 'ok':
+                self.bot.edit_message_text(
+                    "❌ Invalid credentials. Check your username and password and try again.",
+                    message.chat.id, bot_msg.message_id
+                )
+                return
+
+            # Store credentials
+            credentials_db.upsert_credential(username, password)
+            logger.info(f"Credentials stored via DM for user: {username}")
+
+            # Start initial sync in background
+            def _initial_sync():
+                try:
+                    user_activity.sync_user_starred(username, password, base_url)
+                    logger.info(f"Initial favorites sync completed for {username}")
+                    self.send_message(message.chat.id, f"✅ Your favorites have been successfully synchronized.")
+                except Exception as e:
+                    logger.error(f"Initial sync failed for {username}: {e}")
+            
+            threading.Thread(target=_initial_sync, daemon=True).start()
+
+            self.bot.edit_message_text(
+                f"✅ Credentials verified and saved for <b>{username}</b>.\n\n"
+                f"Your favorites are syncing in the background. You can now return to the group and use <code>/recommend</code>.",
+                message.chat.id, bot_msg.message_id, parse_mode="HTML"
+            )
+
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "wrong username or password" in err_msg or "code: 40" in err_msg:
+                user_friendly_err = "❌ Invalid credentials. Please check your Navidrome username and password."
+            elif "network" in err_msg or "connection" in err_msg:
+                user_friendly_err = "❌ Connection error. The bot could not reach the Navidrome server."
+            else:
+                user_friendly_err = "❌ An error occurred while verifying the credentials."
+                
+            logger.error(f"Login error for user {username}: {e}", exc_info=True)
+            self.bot.edit_message_text(user_friendly_err, message.chat.id, bot_msg.message_id)
+
     
+    def _format_and_send_recommendations(
+        self, chat_id: int, source_user: str, item_type: str, items: list
+    ) -> None:
+        """
+        Format and send recommendations to the chat.
+
+        :param chat_id: Telegram chat ID.
+        :param source_user: Username whose favorites are being recommended.
+        :param item_type: One of 'song', 'album', 'artist'.
+        :param items: List of item dicts from the Subsonic API.
+        """
+        type_labels = {'song': 'songs', 'album': 'albums', 'artist': 'artists'}
+        type_emojis = {'song': '🎵', 'album': '💿', 'artist': '👤'}
+        label = type_labels.get(item_type, item_type)
+        emoji = type_emojis.get(item_type, '🎯')
+
+        type_labels = {'song': 'songs', 'album': 'albums', 'artist': 'artists'}
+        type_emojis = {'song': '🎵', 'album': '💿', 'artist': '👤'}
+        emoji = type_emojis.get(item_type, '🎯')
+
+        header = f"🎯 <b>{label.capitalize()} Recommendations</b>\n📌 Based on favorites by <b>{source_user}</b>"
+        
+        if item_type == 'song':
+            lines = [header, ""]
+            for item in items:
+                title = item.get('title', 'Unknown')
+                artist = item.get('artist', 'Unknown')
+                album = item.get('album', '')
+                genre = item.get('genre', '')
+                
+                line = f"{emoji} <b>{title}</b> — {artist}"
+                if album:
+                    line += f" ({album})"
+                if genre:
+                    line += f" 🏷 {genre}"
+                lines.append(line)
+            
+            self.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
+
+        elif item_type == 'album':
+            lines = [header, ""]
+            media_group = []
+            
+            for item in items:
+                name = item.get('name', item.get('album', 'Unknown'))
+                artist = item.get('artist', item.get('albumArtist', 'Unknown'))
+                year = item.get('year', '')
+                genre = item.get('genre', '')
+                cover_id = item.get('coverArt')
+                
+                line = f"{emoji} <b>{name}</b> — {artist}"
+                if year:
+                    line += f" 📅 {year}"
+                if genre:
+                    line += f" 🏷 {genre}"
+                lines.append(line)
+
+                if cover_id:
+                    try:
+                        photo_bytes = self.navidrome.get_cover_art_bytes(cover_id)
+                        if photo_bytes:
+                            media_group.append(InputMediaPhoto(photo_bytes))
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch cover for album {name}: {e}")
+
+            full_caption = "\n".join(lines)
+            
+            if media_group:
+                # Truncate caption if it exceeds Telegram's 1024 limit for media captions
+                if len(full_caption) > 1024:
+                    full_caption = full_caption[:1021] + "..."
+                
+                # Assign the full caption to the FIRST item in the group
+                media_group[0].caption = full_caption
+                media_group[0].parse_mode = "HTML"
+                
+                for k in range(0, len(media_group), 10):
+                    self.bot.send_media_group(chat_id, media_group[k:k+10])
+            else:
+                self.send_message(chat_id, full_caption, parse_mode="HTML")
+
+        elif item_type == 'artist':
+            lines = [header, ""]
+            media_group = []
+            
+            for item in items:
+                name = item.get('name', 'Unknown')
+                artist_id = item.get('id')
+                
+                genres = []
+                if artist_id:
+                    try:
+                        genres = self.navidrome.get_artist_genres(artist_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch genres for artist {name}: {e}")
+                
+                line = f"{emoji} <b>{name}</b>"
+                if genres:
+                    line += f" 🏷 {', '.join(genres)}"
+                lines.append(line)
+
+                if artist_id:
+                    try:
+                        photo_bytes = self.navidrome.get_cover_art_bytes(artist_id)
+                        if photo_bytes:
+                            media_group.append(InputMediaPhoto(photo_bytes))
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch image for artist {name}: {e}")
+
+            full_caption = "\n".join(lines)
+
+            if media_group:
+                if len(full_caption) > 1024:
+                    full_caption = full_caption[:1021] + "..."
+                
+                media_group[0].caption = full_caption
+                media_group[0].parse_mode = "HTML"
+                
+                for k in range(0, len(media_group), 10):
+                    self.bot.send_media_group(chat_id, media_group[k:k+10])
+            else:
+                self.send_message(chat_id, full_caption, parse_mode="HTML")
+
     def _perform_search(self, message: Message, query: str):
         """
         Execute the search logic (common for /search command and ForceReply).
@@ -605,6 +977,34 @@ class TelegramBot:
                 logger.error(f"Telegram polling crashed: {e}. Retrying in 5 seconds...", exc_info=True)
                 time.sleep(5)
 
+    def get_recent_albums(self, message: Message):
+        """
+        Handle /recent command to show newly added albums.
+        """
+        logger.info(f"User {message.from_user.username} requested recent albums")
+        try:
+            # get_new_albums usually defaults to 24h, allows override
+            # We want the absolute latest 10, regardless of specific time window? 
+            # The generic method might filter by "N hours". 
+            # Let's use a large window (e.g. 30 days) ensuring we get at least some content, 
+            # then slice the top 10.
+            
+            recent = self.navidrome.get_new_albums(hours=24 * 30, force=False)
+            
+            if not recent:
+                self.bot.reply_to(message, "📭 No albums added in the last 30 days.")
+                return
+            
+            # Sort by 'created' DESC is already done in get_new_albums
+            top_10 = recent[:10]
+            
+            msg = self.format_album_list(top_10, "🆕 <b>Recently Added Albums:</b>")
+            self.send_message(message.chat.id, msg)
+
+        except Exception as e:
+            logger.error(f"Error fetching recent: {e}", exc_info=True)
+            self.bot.reply_to(message, f"❌ Error: {str(e)}")
+
     # ========== Notification Methods ==========
 
     def send_message(self, chat_id: int, text: str, parse_mode: str = "HTML", **kwargs) -> None:
@@ -732,14 +1132,14 @@ class TelegramBot:
             compilation_keywords = ["compilation", "anthology", "collection", "complete", "hits", "best of", "essentials", "box set"]
             
             for key, label in type_map.items():
-                if f" {key}" in title_lower or f"({key}" in title_lower or f"[{key}" in title_lower:
+                if f" {key}" in title_lower or f"({key}" in title_lower or f"[{key}" in title_lower or title_lower.startswith(f"{key} "):
                     detected_type = label
                     break
             
             # Additional check for compilation synonyms
             if not detected_type:
                 for word in compilation_keywords:
-                    if f" {word}" in title_lower or f"({word}" in title_lower or f"[{word}" in title_lower:
+                    if f" {word}" in title_lower or f"({word}" in title_lower or f"[{word}" in title_lower or title_lower.startswith(f"{word} "):
                         detected_type = "Compilation"
                         break
         

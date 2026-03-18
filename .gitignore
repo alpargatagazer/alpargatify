@@ -8,7 +8,7 @@
 .vscode/
 
 # Python venvs
-**.venv
+**venv
 
 # Databases, cache and container volumes
 .db*

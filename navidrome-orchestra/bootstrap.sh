@@ -106,7 +106,8 @@ cleanup_secrets() {
 
 cleanup_all() {
   cleanup_tmpfiles
-  cleanup_secrets
+  # If we cleanup secrets, WUD will have problems when re-running services
+  # cleanup_secrets
 }
 trap cleanup_all EXIT
 
@@ -121,13 +122,14 @@ ENABLE_EXTRA_STORAGE=1
 ENABLE_MONITORING=1
 ENABLE_PICARD=1
 ENABLE_DOZZLE=1
+ENABLE_MDRM=1
 # - local: default behavior, <protocol>="http"
 # - prod:  production behavior, <protocol>="https"
 PROD_MODE=0   # 0=local, 1=prod
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--down] [--no-wud] [--no-extra-storage] [--no-monitoring] [--no-picard] [-h|--help]
+Usage: $(basename "$0") [--down] [--no-wud] [--no-extra-storage] [--no-monitoring] [--no-picard] [--no-mdrm] [-h|--help]
 
 Modes:
   (default)         : bring services up (docker compose up -d)
@@ -139,6 +141,7 @@ Profile control (defaults: all enabled):
   --no-monitoring   : disable the "monitoring" profile
   --no-picard       : disable the "picard" profile
   --no-dozzle       : disable the "dozzle" profile
+  --no-mdrm         : disable the "mdrm" profile (Metadata Remote)
   --prod            : Caddy starts using HTTPS
 
 Examples:
@@ -158,6 +161,7 @@ while (( "$#" )); do
     --no-monitoring) ENABLE_MONITORING=0; shift ;;
     --no-picard) ENABLE_PICARD=0; shift ;;
     --no-dozzle) ENABLE_DOZZLE=0; shift ;;
+    --no-mdrm) ENABLE_MDRM=0; shift ;;
     -h|--help) usage; exit 0 ;;
     --) shift; break ;;
     -*) echo "Unknown option: $1" >&2; usage; exit 2 ;;
@@ -296,6 +300,7 @@ printf "  - extra-storage: %s\n" "$( [[ $ENABLE_EXTRA_STORAGE -eq 1 ]] && echo "
 printf "  - wud          : %s\n" "$( [[ $ENABLE_WUD -eq 1 ]] && echo "enabled" || echo "disabled" )"
 printf "  - monitoring   : %s\n" "$( [[ $ENABLE_MONITORING -eq 1 ]] && echo "enabled" || echo "disabled" )"
 printf "  - picard       : %s\n" "$( [[ $ENABLE_PICARD -eq 1 ]] && echo "enabled" || echo "disabled" )"
+printf "  - mdrm         : %s\n" "$( [[ $ENABLE_MDRM -eq 1 ]] && echo "enabled" || echo "disabled" )"
 
 echo "======================================"
 echo
@@ -702,6 +707,9 @@ if [[ $SUPPORTS_PROFILE -eq 1 ]]; then
   fi
   if [[ $ENABLE_DOZZLE -eq 1 ]]; then
     PROFILE_ARGS+=( --profile dozzle )
+  fi
+  if [[ $ENABLE_MDRM -eq 1 ]]; then
+    PROFILE_ARGS+=( --profile mdrm )
   fi
   if [[ $PROD_MODE -eq 1 ]]; then
     PROFILE_ARGS+=( --profile prod )

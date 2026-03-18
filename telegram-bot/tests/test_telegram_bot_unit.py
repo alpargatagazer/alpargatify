@@ -1,7 +1,7 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -69,10 +69,9 @@ class TestTelegramBotUnit(unittest.TestCase):
         self.assertEqual(TelegramBot._get_album_type_tag(alb_none), "")
 
     @patch('telegram_bot.TelegramBot.send_message')
-    @patch('telegram_bot.NavidromeClient.get_new_albums')
-    def test_recent_command(self, mock_get_new, mock_send):
+    def test_recent_command(self, mock_send):
         # Mock recent albums
-        mock_get_new.return_value = [
+        self.bot.navidrome.get_new_albums.return_value = [
             {'name': 'Alb1', 'artist': 'Art1', 'created': '2024-01-01'},
             {'name': 'Alb2', 'artist': 'Art2', 'created': '2023-12-31'}
         ]
@@ -85,11 +84,11 @@ class TestTelegramBotUnit(unittest.TestCase):
         # Bypass authorization check
         self.bot._is_authorized = MagicMock(return_value=True)
         
-        # Call the decorated method
+        # Call the method
         self.bot.get_recent_albums(msg)
         
         # Verify get_new_albums called
-        mock_get_new.assert_called_with(hours=720, force=False)
+        self.bot.navidrome.get_new_albums.assert_called_with(hours=720, force=False) # 24*30
         
         # Verify message sent
         self.assertTrue(mock_send.called)
@@ -98,21 +97,20 @@ class TestTelegramBotUnit(unittest.TestCase):
         self.assertIn("Alb2", args[1])
 
     @patch('telegram_bot.TelegramBot.send_message')
-    @patch('telegram_bot.NavidromeClient.get_albums_by_year')
-    def test_process_year_request(self, mock_get_year, mock_send):
+    def test_process_year_request(self, mock_send):
         # Test specific year
         self.bot._process_year_request(123, "1994")
-        mock_get_year.assert_called_with(1994, 1994, limit=50)
+        self.bot.navidrome.get_albums_by_year.assert_called_with(1994, 1994, limit=40)
         
         # Test decade
         self.bot._process_year_request(123, "90s")
-        mock_get_year.assert_called_with(1990, 1999, limit=50)
+        self.bot.navidrome.get_albums_by_year.assert_called_with(1990, 1999, limit=40)
         
         # Test current
         import datetime
         now = datetime.datetime.now().year
         self.bot._process_year_request(123, "current")
-        mock_get_year.assert_called_with(now, now, limit=50)
+        self.bot.navidrome.get_albums_by_year.assert_called_with(now, now, limit=40)
         
         # Test invalid
         self.bot._process_year_request(123, "invalid")

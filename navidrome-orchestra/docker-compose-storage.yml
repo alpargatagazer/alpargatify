@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   syncthing:
-    image: syncthing/syncthing:2.0.13
+    image: syncthing/syncthing:2.0.15
     user: ${PUID}:${PGID}
     profiles: [ "extra-storage" ]
     container_name: syncthing
@@ -64,7 +64,7 @@ services:
       retries: 3
 
   filebrowser:
-    image: filebrowser/filebrowser:v2.55.0
+    image: filebrowser/filebrowser:v2.62.1
     user: ${PUID}:${PGID}
     profiles: [ "extra-storage" ]
     container_name: filebrowser

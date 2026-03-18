@@ -5,6 +5,7 @@ import logging
 import os
 import random
 import string
+import unicodedata
 from typing import List, Dict, Optional, Any
 
 import requests
@@ -14,6 +15,9 @@ from urllib3.util.retry import Retry
 from secrets_loader import get_secret
 
 logger = logging.getLogger(__name__)
+
+class AuthError(Exception):
+    pass
 
 class NavidromeClient:
     """
@@ -46,6 +50,8 @@ class NavidromeClient:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
         self.timeout = 30 # Default timeout in seconds
+
+
 
     def _get_auth_params(self) -> dict[str, str | None]:
         """
@@ -105,7 +111,10 @@ class NavidromeClient:
             subsystem = data.get('subsonic-response', {})
             if subsystem.get('status') == 'failed':
                 error = subsystem.get('error', {})
-                error_msg = f"Navidrome API Error: {error.get('message')} (Code: {error.get('code')})"
+                error_code = error.get('code')
+                error_msg = f"Navidrome API Error: {error.get('message')} (Code: {error_code})"
+                if error_code == 40:
+                    raise AuthError(error_msg)
                 logger.error(error_msg)
                 raise Exception(error_msg)
             
@@ -166,8 +175,42 @@ class NavidromeClient:
                 for s in album['song']:
                     total_size += s.get('size', 0)
             album['total_size_bytes'] = total_size
+            # Remove song list to save memory/disk space, as it's not used by the bot
+            album.pop('song', None)
             return album
         return None
+
+    def get_artist(self, artist_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch detailed information for a single artist.
+        
+        :param artist_id: The unique artist ID.
+        :return: Artist dictionary or None if fetch fails.
+        """
+        response = self._request('getArtist', {'id': artist_id})
+        if response and 'artist' in response:
+            return response['artist']
+        return None
+
+    def get_artist_genres(self, artist_id: str) -> List[str]:
+        """
+        Derive genres for an artist by inspecting their albums.
+        
+        :param artist_id: The unique artist ID.
+        :return: List of unique genre names.
+        """
+        artist = self.get_artist(artist_id)
+        if not artist:
+            return []
+        
+        genres = set()
+        albums = artist.get('album', [])
+        for album in albums:
+            genre = album.get('genre')
+            if genre:
+                genres.add(genre)
+                
+        return sorted(list(genres))
 
     def sync_library(self, force: bool = False) -> List[Dict[str, Any]]:
         """
@@ -244,6 +287,8 @@ class NavidromeClient:
                     for alb in data:
                         aid = alb.get('id')
                         if aid:
+                            # Strip song list from existing cache entries to ensure immediate memory relief
+                            alb.pop('song', None)
                             cached_albums[aid] = alb
             except Exception as e:
                 logger.warning(f"Cache load error: {e}. Starting fresh.")
@@ -429,13 +474,20 @@ class NavidromeClient:
         
         for album in all_albums:
             release_date = None
-            # Prioritize 'releaseDate' which comes from getAlbum detailed view
-            possible_keys = ['releaseDate', 'date', 'originalDate', 'published']
+            # Prioritize properties that contain full dates. OPUS files often have only year in 'releaseDate'.
+            possible_keys = ['originalReleaseDate', 'releaseDate', 'date', 'originalDate', 'published']
             for k in possible_keys:
                 if k in album and album[k]:
-                    release_date = album[k]
-                    break
+                    val = album[k]
+                    # We need a precise date (month + day) or a string long enough to parse
+                    if isinstance(val, dict) and val.get('month') and val.get('day'):
+                        release_date = val
+                        break
+                    elif isinstance(val, str) and len(str(val)) >= 10:
+                        release_date = val
+                        break
             
+            # If we couldn't find a precise date, this album won't match an anniversary
             if release_date:
                 try:
                     # Case 1: releaseDate is a Dictionary (Navidrome getAlbum format)
@@ -468,32 +520,40 @@ class NavidromeClient:
 
     def search_albums(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """
-        Search for albums using the Subsonic search3 endpoint.
+        Search for albums using a local lookup over the synchronized library.
         Matches against artist names and album titles.
+        The search is case-insensitive, ignores accents (tildes), and requires the query
+        to be an exact substring of either the artist name or the album name.
 
         :param query: The search query string.
         :param limit: Maximum number of albums to return.
         :return: List of matching album dictionaries.
         """
-        params = {
-            'query': query,
-            'albumCount': limit,
-            'artistCount': 0,
-            'songCount': 0
-        }
+        def normalize(s: str) -> str:
+            if not s:
+                return ""
+            # Decompose into characters and combining marks, then remove combining marks
+            return unicodedata.normalize('NFD', str(s)).encode('ascii', 'ignore').decode('utf-8').lower()
+            
+        normalized_query = normalize(query)
+        if not normalized_query:
+            return []
+            
+        all_albums = self.sync_library(force=False)
+        matches = []
         
-        folder_id = self.get_music_folder_id()
-        if folder_id:
-            params['musicFolderId'] = folder_id
-
-        response = self._request('search3', params)
+        for album in all_albums:
+            artist = normalize(album.get('artist', ''))
+            name = normalize(album.get('name', ''))
+            
+            if normalized_query in artist or normalized_query in name:
+                matches.append(album)
+                
+        # Sort alphabetically by artist, then album
+        matches.sort(key=lambda x: (str(x.get('artist', '')).lower(), str(x.get('name', '')).lower()))
         
-        if response and 'searchResult3' in response:
-            albums = response['searchResult3'].get('album', [])
-            logger.info(f"Search for '{query}' returned {len(albums)} albums")
-            return albums
-        
-        return []
+        logger.info(f"Local search for '{query}' returned {len(matches)} albums")
+        return matches[:limit]
 
     def get_random_album(self) -> Optional[Dict[str, Any]]:
         """
@@ -547,13 +607,22 @@ class NavidromeClient:
         """
         # Fetch history (default limit is usually 50, let's get more for better stats)
         # getHistory doesn't take 'days', so we fetch a large batch and filter locally.
-        response = self._request('getHistory', {'size': 500})
+        response = None
+        try:
+            response = self._request('getHistory', {'size': 500})
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"getHistory request failed (likely not supported): {e}")
+        except Exception as e:
+            logger.warning(f"Unexpected error calling getHistory: {e}")
         
         if not response or 'history' not in response:
             logger.warning("getHistory returned no data or error. Falling back to 'frequent' albums.")
-            fallback = self._request('getAlbumList2', {'type': 'frequent', 'size': limit})
-            if fallback and 'albumList2' in fallback:
-                return fallback['albumList2'].get('album', [])
+            try:
+                fallback = self._request('getAlbumList2', {'type': 'frequent', 'size': limit})
+                if fallback and 'albumList2' in fallback:
+                    return fallback['albumList2'].get('album', [])
+            except Exception as e:
+                logger.error(f"Fallback to frequent albums also failed: {e}")
             return []
         
         entries = response['history'].get('item', [])
@@ -781,6 +850,16 @@ class NavidromeClient:
         url = f"{self._base_url}/rest/getCoverArt?{query_string}"
         return url
 
+    def get_artist_image_url(self, artist_id: str) -> Optional[str]:
+        """
+        Generate an authenticated URL for artist image.
+        Navidrome uses getCoverArt endpoint for artist images too.
+        
+        :param artist_id: Artist ID
+        :return: Full URL to artist image or None
+        """
+        return self.get_cover_art_url(artist_id)
+
     def get_cover_art_bytes(self, cover_id: str) -> Optional[bytes]:
         """
         Download album cover art as binary data.
@@ -803,4 +882,99 @@ class NavidromeClient:
             return response.content
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to download cover art: {e}")
+            return None
+
+    @classmethod
+    def from_credentials(cls, base_url: str, username: str, password: str) -> 'NavidromeClient':
+        """
+        Factory method to create a NavidromeClient with explicit credentials
+        instead of reading from Docker secrets.
+
+        :param base_url: Navidrome server URL.
+        :param username: Navidrome username.
+        :param password: Navidrome password.
+        :return: Configured NavidromeClient instance.
+        """
+        instance = cls.__new__(cls)
+        instance._base_url = base_url.rstrip('/') if base_url else None
+        instance._username = username
+        instance._password = password
+        instance._client_name = "telegram-bot"
+        instance._api_version = os.environ.get("NAVIDROME_API_VERSION", "1.16.1")
+        instance._music_folder_name = os.environ.get("NAVIDROME_MUSIC_FOLDER", "Music Library")
+        instance._music_folder_id = None
+        instance._scan_meta_file = '/app/data/scan_status.json'
+
+        # Setup session with retries
+        instance.session = requests.Session()
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        instance.session.mount("http://", adapter)
+        instance.session.mount("https://", adapter)
+        instance.timeout = 30
+
+        return instance
+
+    def get_starred(self) -> Optional[Dict[str, List[Dict[str, Any]]]]:
+        """
+        Fetch starred (favorite) songs, albums, and artists for the authenticated user.
+        Uses the getStarred2 endpoint (ID3-based).
+
+        :return: Dictionary with keys 'song', 'album', 'artist', each containing
+                 a list of item dicts. Returns None on failure.
+        """
+        response = self._request('getStarred2')
+        if not response or 'starred2' not in response:
+            return None
+
+        starred = response['starred2']
+        return {
+            'song': starred.get('song', []),
+            'album': starred.get('album', []),
+            'artist': starred.get('artist', [])
+        }
+
+    def get_user_last_login(self, username: str) -> Optional[datetime.datetime]:
+        """
+        Check when a user last logged into Navidrome using the Native API.
+        Requires admin credentials on this client instance.
+
+        :param username: The Navidrome username to check.
+        :return: datetime of last login, or None if user not found.
+        """
+        if not self._base_url:
+            return None
+
+        url = f"{self._base_url}/api/user"
+        try:
+            # Navidrome Native API uses HTTP Basic Auth
+            response = self.session.get(
+                url,
+                auth=(self._username, self._password),
+                params={'_end': 100, '_order': 'ASC', '_sort': 'userName', '_start': 0},
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            users = response.json()
+
+            for user in users:
+                if user.get('userName') == username:
+                    last_login_str = user.get('lastLoginAt')
+                    if last_login_str:
+                        # Parse ISO 8601 format
+                        if last_login_str.endswith('Z'):
+                            last_login_str = last_login_str[:-1] + '+00:00'
+                        return datetime.datetime.fromisoformat(last_login_str)
+                    return None
+
+            logger.debug(f"User '{username}' not found in Navidrome.")
+            return None
+
+        except Exception as e:
+            logger.warning(f"Error checking last login for '{username}': {e}")
             return None
