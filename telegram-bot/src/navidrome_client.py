@@ -5,6 +5,7 @@ import logging
 import os
 import random
 import string
+import unicodedata
 from typing import List, Dict, Optional, Any
 
 import requests
@@ -479,32 +480,40 @@ class NavidromeClient:
 
     def search_albums(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """
-        Search for albums using the Subsonic search3 endpoint.
+        Search for albums using a local lookup over the synchronized library.
         Matches against artist names and album titles.
+        The search is case-insensitive, ignores accents (tildes), and requires the query
+        to be an exact substring of either the artist name or the album name.
 
         :param query: The search query string.
         :param limit: Maximum number of albums to return.
         :return: List of matching album dictionaries.
         """
-        params = {
-            'query': query,
-            'albumCount': limit,
-            'artistCount': 0,
-            'songCount': 0
-        }
+        def normalize(s: str) -> str:
+            if not s:
+                return ""
+            # Decompose into characters and combining marks, then remove combining marks
+            return unicodedata.normalize('NFD', str(s)).encode('ascii', 'ignore').decode('utf-8').lower()
+            
+        normalized_query = normalize(query)
+        if not normalized_query:
+            return []
+            
+        all_albums = self.sync_library(force=False)
+        matches = []
         
-        folder_id = self.get_music_folder_id()
-        if folder_id:
-            params['musicFolderId'] = folder_id
-
-        response = self._request('search3', params)
+        for album in all_albums:
+            artist = normalize(album.get('artist', ''))
+            name = normalize(album.get('name', ''))
+            
+            if normalized_query in artist or normalized_query in name:
+                matches.append(album)
+                
+        # Sort alphabetically by artist, then album
+        matches.sort(key=lambda x: (str(x.get('artist', '')).lower(), str(x.get('name', '')).lower()))
         
-        if response and 'searchResult3' in response:
-            albums = response['searchResult3'].get('album', [])
-            logger.info(f"Search for '{query}' returned {len(albums)} albums")
-            return albums
-        
-        return []
+        logger.info(f"Local search for '{query}' returned {len(matches)} albums")
+        return matches[:limit]
 
     def get_random_album(self) -> Optional[Dict[str, Any]]:
         """

@@ -85,25 +85,20 @@ class TestNavidromeClientUnit(unittest.TestCase):
         # Check cache
         self.assertEqual(self.client._music_folder_id, '1')
 
-    @patch('navidrome_client.NavidromeClient._request')
-    def test_search_albums(self, mock_request):
-        # Explicit ID to ensure filtering is called
-        self.client._music_folder_id = '1'
-        mock_request.return_value = {
-            'searchResult3': {
-                'album': [{'id': 'alb1', 'name': 'Great Album', 'artist': 'Great Artist'}]
-            }
-        }
+    @patch('navidrome_client.NavidromeClient.sync_library')
+    def test_search_albums(self, mock_sync):
+        mock_sync.return_value = [
+            {'id': 'alb1', 'name': 'Crazy Town', 'artist': 'Some Artist'},
+            {'id': 'alb2', 'name': 'Another Album', 'artist': 'CrAzY tOwN Band'},
+            {'id': 'alb3', 'name': 'Cräzy Tówn', 'artist': 'Band'},
+            {'id': 'alb4', 'name': 'Nothing', 'artist': 'Here'}
+        ]
         
-        results = self.client.search_albums("query", limit=5)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['name'], 'Great Album')
-        
-        # Verify params
-        args, kwargs = mock_request.call_args
-        self.assertEqual(args[0], 'search3')
-        self.assertEqual(args[1]['musicFolderId'], '1')
-        self.assertEqual(args[1]['query'], 'query')
+        results = self.client.search_albums("crazy town", limit=5)
+        self.assertEqual(len(results), 3)
+        self.assertEqual(results[0]['id'], 'alb3')
+        self.assertEqual(results[1]['id'], 'alb2')
+        self.assertEqual(results[2]['id'], 'alb1')
 
     @patch('navidrome_client.NavidromeClient._request')
     def test_get_now_playing(self, mock_request):
