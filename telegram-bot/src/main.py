@@ -9,7 +9,7 @@ import schedule
 
 from navidrome_client import NavidromeClient
 from telegram_bot import TelegramBot
-import recommendations
+import user_activity
 import credentials_db
 
 # Configure Logging
@@ -81,13 +81,16 @@ def purge_inactive_users_job() -> None:
     logger.info("Starting inactive user purge check...")
     try:
         admin_client = NavidromeClient()
-        purged = recommendations.purge_inactive_users(admin_client, max_days=30)
+        purged = user_activity.purge_inactive_users(admin_client, max_days=30)
         if purged:
             logger.info(f"Purged {len(purged)} inactive user(s): {', '.join(purged)}")
         else:
             logger.info("No inactive users to purge.")
     except Exception as e:
         logger.error(f"Error during user purge: {e}", exc_info=True)
+
+
+    logger.info("Sunday check completed.")
 
 
 def run_scheduler():

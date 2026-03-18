@@ -1,6 +1,6 @@
 """
-Recommendation engine: syncs user favorites from Navidrome and
-provides recommendations based on other users' starred items.
+User activity engine: handles user synchronization, favorites,
+recommendations, and aggregated playback statistics.
 """
 
 import logging
@@ -124,7 +124,7 @@ def get_random_user_recommendations(
     :param exclude_username: Optional username to exclude from random selection.
     :return: Dict with 'username' and 'items' keys, or None if no users available.
     """
-    users = credentials_db.list_users()
+    users = validate_and_get_users(base_url)
     if exclude_username:
         users = [u for u in users if u != exclude_username]
 
@@ -141,6 +141,35 @@ def get_random_user_recommendations(
         'username': chosen,
         'items': items
     }
+
+
+def validate_and_get_users(base_url: str) -> List[str]:
+    """
+    Iterate over all stored users, ping the server to check credentials.
+    If an AuthError is raised (invalid credentials), the user is deleted from the database.
+    
+    :param base_url: Navidrome server base URL.
+    :return: List of valid usernames.
+    """
+    from navidrome_client import AuthError
+    users = credentials_db.list_users()
+    valid_users = []
+    for username in users:
+        cred = credentials_db.get_credential(username)
+        if not cred:
+            continue
+        try:
+            client = NavidromeClient.from_credentials(base_url, cred[0], cred[1])
+            client._request('ping')
+            valid_users.append(username)
+        except AuthError:
+            logger.warning(f"Validation failed for {username} (AuthError). Deleting from DB.")
+            credentials_db.delete_user(username)
+        except Exception as e:
+            # If it's a network error, we don't delete the user, we just assume they might be valid
+            logger.warning(f"Validation ping error for {username}: {e}")
+            valid_users.append(username)
+    return valid_users
 
 
 def purge_inactive_users(admin_client: NavidromeClient, max_days: int = 30) -> List[str]:

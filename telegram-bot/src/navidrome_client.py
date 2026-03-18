@@ -16,6 +16,9 @@ from secrets_loader import get_secret
 
 logger = logging.getLogger(__name__)
 
+class AuthError(Exception):
+    pass
+
 class NavidromeClient:
     """
     Client for interacting with the Navidrome (Subsonic) API.
@@ -47,6 +50,8 @@ class NavidromeClient:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
         self.timeout = 30 # Default timeout in seconds
+
+
 
     def _get_auth_params(self) -> dict[str, str | None]:
         """
@@ -106,7 +111,10 @@ class NavidromeClient:
             subsystem = data.get('subsonic-response', {})
             if subsystem.get('status') == 'failed':
                 error = subsystem.get('error', {})
-                error_msg = f"Navidrome API Error: {error.get('message')} (Code: {error.get('code')})"
+                error_code = error.get('code')
+                error_msg = f"Navidrome API Error: {error.get('message')} (Code: {error_code})"
+                if error_code == 40:
+                    raise AuthError(error_msg)
                 logger.error(error_msg)
                 raise Exception(error_msg)
             
@@ -599,13 +607,22 @@ class NavidromeClient:
         """
         # Fetch history (default limit is usually 50, let's get more for better stats)
         # getHistory doesn't take 'days', so we fetch a large batch and filter locally.
-        response = self._request('getHistory', {'size': 500})
+        response = None
+        try:
+            response = self._request('getHistory', {'size': 500})
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"getHistory request failed (likely not supported): {e}")
+        except Exception as e:
+            logger.warning(f"Unexpected error calling getHistory: {e}")
         
         if not response or 'history' not in response:
             logger.warning("getHistory returned no data or error. Falling back to 'frequent' albums.")
-            fallback = self._request('getAlbumList2', {'type': 'frequent', 'size': limit})
-            if fallback and 'albumList2' in fallback:
-                return fallback['albumList2'].get('album', [])
+            try:
+                fallback = self._request('getAlbumList2', {'type': 'frequent', 'size': limit})
+                if fallback and 'albumList2' in fallback:
+                    return fallback['albumList2'].get('album', [])
+            except Exception as e:
+                logger.error(f"Fallback to frequent albums also failed: {e}")
             return []
         
         entries = response['history'].get('item', [])

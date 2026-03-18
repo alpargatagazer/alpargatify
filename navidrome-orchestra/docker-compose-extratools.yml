@@ -100,7 +100,7 @@ services:
       retries: 3
 
   dozzle:
-    image: amir20/dozzle:v10.1.1
+    image: amir20/dozzle:v10.1.2
     profiles: [ "dozzle" ]
     container_name: dozzle
     labels:

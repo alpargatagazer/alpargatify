@@ -10,7 +10,7 @@ import telebot
 from telebot.types import Message, InputMediaPhoto
 
 import credentials_db
-import recommendations
+import user_activity
 from navidrome_client import NavidromeClient
 from secrets_loader import get_secret
 import requests
@@ -368,22 +368,12 @@ class TelegramBot:
 
         # NOTE: /top command is preserved but disabled (Navidrome doesn't support global history)
         # @self.bot.message_handler(commands=['top'])
-        # @self.authorized_only
+        # @self.authorized_only(allow_dms=False)
         # def top_albums_start(message: Message):
         #     """
-        #     Handle /top command to show the period selection menu.
+        #     Handle /top command to show the global top albums.
         #     """
-        #     from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-        #     markup = InlineKeyboardMarkup()
-        #     markup.row(
-        #         InlineKeyboardButton("1 Day", callback_data="top:1"),
-        #         InlineKeyboardButton("3 Days", callback_data="top:3")
-        #     )
-        #     markup.row(
-        #         InlineKeyboardButton("7 Days", callback_data="top:7"),
-        #         InlineKeyboardButton("30 Days", callback_data="top:30")
-        #     )
-        #     self.bot.send_message(message.chat.id, "📊 Select the period for the Top 10 albums:", reply_markup=markup)
+        #     pass
 
         @self.bot.message_handler(commands=['genres'])
         @self.authorized_only(allow_dms=False)
@@ -485,9 +475,10 @@ class TelegramBot:
         def handle_rec_type(call):
             """Handle recommendation type selection -> show user selection."""
             item_type = call.data.split(':')[1]
-            self.bot.answer_callback_query(call.id)
+            self.bot.answer_callback_query(call.id, "Validating active users...")
 
-            users = credentials_db.list_users()
+            base_url = self.navidrome._base_url or ""
+            users = user_activity.validate_and_get_users(base_url)
             if not users:
                 self.bot.edit_message_text(
                     "⚠️ No users have registered yet. To share your favorites, "
@@ -528,7 +519,7 @@ class TelegramBot:
 
             try:
                 if chosen_user == '__random__':
-                    result = recommendations.get_random_user_recommendations(
+                    result = user_activity.get_random_user_recommendations(
                         item_type, limit, base_url
                     )
                     if not result or not result.get('items'):
@@ -538,7 +529,7 @@ class TelegramBot:
                     source_user = result['username']
                     items = result['items']
                 else:
-                    items = recommendations.get_recommendations(
+                    items = user_activity.get_recommendations(
                         chosen_user, item_type, limit, base_url
                     )
                     source_user = chosen_user
@@ -690,7 +681,7 @@ class TelegramBot:
             # Start initial sync in background
             def _initial_sync():
                 try:
-                    recommendations.sync_user_starred(username, password, base_url)
+                    user_activity.sync_user_starred(username, password, base_url)
                     logger.info(f"Initial favorites sync completed for {username}")
                     self.send_message(message.chat.id, f"✅ Your favorites have been successfully synchronized.")
                 except Exception as e:
