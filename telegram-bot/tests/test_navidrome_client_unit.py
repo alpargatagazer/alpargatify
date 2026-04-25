@@ -163,6 +163,13 @@ class TestNavidromeClientUnit(unittest.TestCase):
         self.assertEqual(results[1]['id'], '2')
         self.assertEqual(results[2]['id'], '5')
 
+    @patch('navidrome_client.requests.Session.get')
+    def test_get_user_last_login_raises_on_error(self, mock_get):
+        # Mock a connection error
+        mock_get.side_effect = Exception("Connection refused")
+        
+        with self.assertRaises(Exception):
+            self.client.get_user_last_login("someuser")
 
 if __name__ == '__main__':
     unittest.main()

@@ -218,11 +218,6 @@ if [ -z "${FILEBROWSER_ADMIN_USER:-}" ] || [ -z "${FILEBROWSER_ADMIN_PASSWORD:-}
   exit 3
 fi
 
-if [ -z "${PICARD_ADMIN_USER:-}" ] || [ -z "${PICARD_ADMIN_PASSWORD:-}" ] && [ $ENABLE_PICARD -eq 1 ]; then
-  warn "PICARD_ADMIN_USER and PICARD_ADMIN_PASSWORD must be set in .env if Picard is enabled. Exiting."
-  exit 3
-fi
-
 # Caddy Basic Auth credentials (required for WUD, Syncthing, and Grafana)
 if [ -z "${CADDY_AUTH_USER:-}" ] || [ -z "${CADDY_AUTH_PASSWORD:-}" ]; then
   err "CADDY_AUTH_USER and CADDY_AUTH_PASSWORD must be set in .env. These are used for additional protection on WUD, Syncthing, and Grafana. Exiting."
@@ -563,7 +558,7 @@ expand_vars_file() {
   # Caddy Basic Auth placeholders
   sed_args+=( -e "s|<caddy_auth_user>|\\\${CADDY_AUTH_USER}|g" )
   sed_args+=( -e "s|<caddy_auth_password_hash>|\\\${CADDY_AUTH_PASSWORD_HASH}|g" )
-
+  
   # For each discovered PORT var, add a replacement
   for pv in "${PORT_VARS[@]:-}"; do
     # lowercase placeholder name (PROMETHEUS_PORT -> prometheus_port)
@@ -732,6 +727,7 @@ unset SYNCTHING_GUI_PASSWORD
 unset FILEBROWSER_ADMIN_PASSWORD
 unset CADDY_AUTH_PASSWORD
 unset CADDY_AUTH_PASSWORD_HASH
+unset PICARD_CADDY_PASSWORD_HASH
 
 ###############################################################################
 # Invoke compose with selected mode using original compose files

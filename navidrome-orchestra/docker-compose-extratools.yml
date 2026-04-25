@@ -60,10 +60,8 @@ services:
       TZ: ${TZ}
       USER_ID: ${PUID}
       GROUP_ID: ${PGID}
-      SECURE_CONNECTION: 1
-      WEB_AUTHENTICATION: 1
-      WEB_AUTHENTICATION_USERNAME: ${PICARD_ADMIN_USER}
-      # WEB_AUTHENTICATION_PASSWORD is injected by entrypoint from secret
+      SECURE_CONNECTION: 0
+      WEB_AUTHENTICATION: 0
       DARK_MODE: 1
       TAKE_CONFIG_OWNERSHIP: 1
     secrets:
@@ -100,7 +98,7 @@ services:
       retries: 3
 
   dozzle:
-    image: amir20/dozzle:v10.1.2
+    image: amir20/dozzle:v10.4.1
     profiles: [ "dozzle" ]
     container_name: dozzle
     labels:

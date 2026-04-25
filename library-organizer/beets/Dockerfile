@@ -1,7 +1,7 @@
 # docker/beets/Dockerfile
 FROM python:3.14-slim AS builder
 
-ARG BEETS_VERSION=2.7.1
+ARG BEETS_VERSION=2.10.0
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system deps needed for beets plugins (file, ffmpeg if needed, libmagic, buildessentials, etc.)

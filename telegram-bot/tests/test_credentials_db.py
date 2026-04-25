@@ -1,10 +1,14 @@
 import os
+import sys
 import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
-
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+# Add project root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
 import credentials_db
 
