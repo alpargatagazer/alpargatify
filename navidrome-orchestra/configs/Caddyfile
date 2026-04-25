@@ -62,7 +62,7 @@
 
 <protocol>://picard.<domain> {
     basicauth {
-        <picard_admin_user> <picard_caddy_password_hash>
+        <caddy_auth_user> <caddy_auth_password_hash>
     }
     route {
         reverse_proxy picard:5800

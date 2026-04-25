@@ -62,8 +62,6 @@ services:
       GROUP_ID: ${PGID}
       SECURE_CONNECTION: 0
       WEB_AUTHENTICATION: 0
-      # WEB_AUTHENTICATION_USERNAME: ${PICARD_ADMIN_USER}
-      # WEB_AUTHENTICATION_PASSWORD is injected by entrypoint from secret
       DARK_MODE: 1
       TAKE_CONFIG_OWNERSHIP: 1
     secrets:

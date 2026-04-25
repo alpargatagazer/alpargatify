@@ -42,7 +42,6 @@ Optional but commonly required depending on enabled profiles:
 - `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` — required if monitoring is enabled.
 - `SYNCTHING_GUI_USER`, `SYNCTHING_GUI_PASSWORD` — required if extra-storage profile is enabled.
 - `FILEBROWSER_ADMIN_USER`, `FILEBROWSER_ADMIN_PASSWORD` — required for filebrowser.
-- `PICARD_ADMIN_USER`, `PICARD_ADMIN_PASSWORD` — required for MusicBrainz Picard.
 - `CADDY_AUTH_USER`, `CADDY_AUTH_PASSWORD` — **required** for the external protection layer on WUD, Syncthing, and Grafana.
 
 See the comments in `bootstrap.sh` for additional variable expectations and port names (any env variable that ends with `_PORT` will be validated).
@@ -115,7 +114,7 @@ Implementation notes about profiles:
 - **Syncthing** (`docker-compose-storage.yml`, profile `extra-storage`): optional synchronisation service that can mirror music folders between hosts. Two folders are created at its init: one for syncing your music with a remote server and the other to sync the **Navidrome** backups. Accessible via web UI at `syncthing.<domain>`.
 - **FileBrowser** (`docker-compose-storage.yml`, profile `extra-storage`): web UI for browsing and managing files inside the music folder. Accessible via web UI at `filebrowser.<domain>`.
 - **WUD** (`docker-compose-extratools.yml`, profile `wud`): optional management web UI that can trigger docker-compose actions based on the bundled compose files. Useful for remote triggers and scheduled actions — keep it disabled if you do not want remote-trigger abilities. Accessible via web UI at `wud.<domain>`.
-- **MusicBrainz Picard** (`docker-compose-extratools.yml`, profile `picard`): optional music tagger and organizer. Accessible via web UI at `picard.<domain>`.
+- **MusicBrainz Picard** (`docker-compose-extratools.yml`, profile `picard`): optional music tagger and organizer. No internal authentication; protected by Caddy Basic Auth. Accessible via web UI at `picard.<domain>`.
 - **Metadata Remote** (`docker-compose-extratools.yml`, profile `mdrm`): web-based audio metadata editor — edit tags, album art, and file names directly on the server via a browser. No internal authentication; protected by Caddy Basic Auth. Accessible via web UI at `mdrm.<domain>`.
 
 ## Safety and secrets
