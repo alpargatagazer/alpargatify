@@ -68,7 +68,8 @@ def init_db() -> None:
                 username        TEXT PRIMARY KEY,
                 encrypted_password BLOB NOT NULL,
                 nonce           BLOB NOT NULL,
-                updated_at      TEXT NOT NULL
+                updated_at      TEXT NOT NULL,
+                telegram_id     INTEGER
             );
 
             CREATE TABLE IF NOT EXISTS starred_cache (
@@ -82,22 +83,34 @@ def init_db() -> None:
             );
         """)
         conn.commit()
+        
+        # Migration: Add telegram_id column if it doesn't exist
+        try:
+            conn.execute("ALTER TABLE credentials ADD COLUMN telegram_id INTEGER")
+            conn.commit()
+            logger.info("Database migration: Added telegram_id column to credentials table.")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                pass # Already exists
+            else:
+                logger.warning(f"Database migration note: {e}")
+
         logger.info("Credentials database initialized.")
     finally:
         conn.close()
 
 
-def upsert_credential(username: str, password: str) -> None:
+def upsert_credential(username: str, password: str, telegram_id: Optional[int] = None) -> None:
     """
     Insert or update a user's Navidrome credentials.
-    The password is encrypted with AES-256-GCM before storage.
-
+    
     :param username: Navidrome username.
-    :param password: Navidrome password (plaintext, will be encrypted).
+    :param password: Navidrome password.
+    :param telegram_id: Optional Telegram user ID to associate.
     """
     key = _get_encryption_key()
     aesgcm = AESGCM(key)
-    nonce = os.urandom(12)  # 96-bit nonce for GCM
+    nonce = os.urandom(12)
     encrypted = aesgcm.encrypt(nonce, password.encode('utf-8'), None)
     now = datetime.now(timezone.utc).isoformat()
 
@@ -105,17 +118,33 @@ def upsert_credential(username: str, password: str) -> None:
     try:
         conn.execute(
             """
-            INSERT INTO credentials (username, encrypted_password, nonce, updated_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO credentials (username, encrypted_password, nonce, updated_at, telegram_id)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(username) DO UPDATE SET
                 encrypted_password = excluded.encrypted_password,
                 nonce = excluded.nonce,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                telegram_id = COALESCE(excluded.telegram_id, credentials.telegram_id)
             """,
-            (username, encrypted, nonce, now)
+            (username, encrypted, nonce, now, telegram_id)
         )
         conn.commit()
         logger.info(f"Credential upserted for user: {username}")
+    finally:
+        conn.close()
+
+
+def get_navidrome_user_by_telegram_id(telegram_id: int) -> Optional[str]:
+    """
+    Find the Navidrome username associated with a Telegram ID.
+    """
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT username FROM credentials WHERE telegram_id = ?",
+            (telegram_id,)
+        ).fetchone()
+        return row[0] if row else None
     finally:
         conn.close()
 

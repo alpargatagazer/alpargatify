@@ -519,8 +519,10 @@ class TelegramBot:
 
             try:
                 if chosen_user == '__random__':
+                    # Try to exclude the current user if we can identify them
+                    caller_nd_user = credentials_db.get_navidrome_user_by_telegram_id(call.from_user.id)
                     result = user_activity.get_random_user_recommendations(
-                        item_type, limit, base_url
+                        item_type, limit, base_url, exclude_username=caller_nd_user
                     )
                     if not result or not result.get('items'):
                         self.send_message(call.message.chat.id,
@@ -674,9 +676,9 @@ class TelegramBot:
                 )
                 return
 
-            # Store credentials
-            credentials_db.upsert_credential(username, password)
-            logger.info(f"Credentials stored via DM for user: {username}")
+            # Store credentials with Telegram ID association
+            credentials_db.upsert_credential(username, password, telegram_id=message.from_user.id)
+            logger.info(f"Credentials stored via DM for user: {username} (TG: {message.from_user.id})")
 
             # Start initial sync in background
             def _initial_sync():

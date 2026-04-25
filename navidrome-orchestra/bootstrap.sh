@@ -498,6 +498,17 @@ else
   exit 3
 fi
 
+# Create the Picard Caddy auth hash and export
+if [[ -n "${PICARD_ADMIN_PASSWORD:-}" ]] && [[ $ENABLE_PICARD -eq 1 ]]; then
+  PICARD_CADDY_PASSWORD_HASH="$(generate_caddy_hash "$PICARD_ADMIN_USER" "$PICARD_ADMIN_PASSWORD" || true)"
+  if [[ -z "${PICARD_CADDY_PASSWORD_HASH:-}" ]]; then
+    err "Failed to generate htpasswd-compliant hash for PICARD_ADMIN_PASSWORD. Ensure 'htpasswd' or 'openssl' is available."
+    exit 5
+  fi
+  export PICARD_CADDY_PASSWORD_HASH
+  info "Generated PICARD_CADDY_PASSWORD_HASH (hidden)."
+fi
+
 ###############################################################################
 # Generate secret files for Docker secrets
 # - WUD and Caddy: store the HASH (not plaintext)
@@ -563,6 +574,10 @@ expand_vars_file() {
   # Caddy Basic Auth placeholders
   sed_args+=( -e "s|<caddy_auth_user>|\\\${CADDY_AUTH_USER}|g" )
   sed_args+=( -e "s|<caddy_auth_password_hash>|\\\${CADDY_AUTH_PASSWORD_HASH}|g" )
+  
+  # Picard Basic Auth placeholders
+  sed_args+=( -e "s|<picard_admin_user>|\\\${PICARD_ADMIN_USER}|g" )
+  sed_args+=( -e "s|<picard_caddy_password_hash>|\\\${PICARD_CADDY_PASSWORD_HASH}|g" )
 
   # For each discovered PORT var, add a replacement
   for pv in "${PORT_VARS[@]:-}"; do
@@ -732,6 +747,7 @@ unset SYNCTHING_GUI_PASSWORD
 unset FILEBROWSER_ADMIN_PASSWORD
 unset CADDY_AUTH_PASSWORD
 unset CADDY_AUTH_PASSWORD_HASH
+unset PICARD_CADDY_PASSWORD_HASH
 
 ###############################################################################
 # Invoke compose with selected mode using original compose files

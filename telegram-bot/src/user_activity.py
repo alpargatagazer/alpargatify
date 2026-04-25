@@ -80,6 +80,11 @@ def ensure_user_synced(username: str, base_url: str) -> bool:
     return sync_user_starred(cred[0], cred[1], base_url)
 
 
+# Global state for picking random users to avoid immediate repeats
+_recently_picked_users: List[str] = []
+_MAX_RECENT_MEMORIZED = 3
+
+
 def get_recommendations(
     from_username: str,
     item_type: str,
@@ -116,25 +121,58 @@ def get_random_user_recommendations(
     exclude_username: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     """
-    Get recommendations from a random user's favorites.
+    Get recommendations from a random user's favorites, avoiding immediate repeats.
 
     :param item_type: One of 'song', 'album', 'artist'.
     :param limit: Number of items to return.
     :param base_url: Navidrome server base URL (for syncing).
-    :param exclude_username: Optional username to exclude from random selection.
-    :return: Dict with 'username' and 'items' keys, or None if no users available.
+    :param exclude_username: Optional Navidrome username to exclude (e.g. the caller).
+    :return: Dict with 'username' and 'items', or None if no users/favorites found.
     """
+    global _recently_picked_users
+    
     users = validate_and_get_users(base_url)
-    if exclude_username:
-        users = [u for u in users if u != exclude_username]
-
     if not users:
         return None
+    
+    # 1. Selection Strategy:
+    # Exclude recently picked users if we have enough alternatives.
+    # If we have 7 users, we can easily exclude the last 3.
+    # If we have only 2 users, we exclude only the last 1.
+    memo_limit = min(len(users) - 1, _MAX_RECENT_MEMORIZED)
+    
+    pool = users
+    if memo_limit > 0:
+        pool = [u for u in users if u not in _recently_picked_users[:memo_limit]]
+    
+    # 2. Exclude the caller if provided
+    if exclude_username:
+        pool = [u for u in pool if u != exclude_username]
 
-    chosen = random.choice(users)
+    if not pool:
+        # Fallback to all valid users (minus caller) if exclusions left us with nothing
+        pool = [u for u in users if u != exclude_username] if exclude_username else users
+        if not pool:
+            return None
+
+    chosen = random.choice(pool)
+    
+    # Update memory: move to front, keep last 3
+    if chosen in _recently_picked_users:
+        _recently_picked_users.remove(chosen)
+    _recently_picked_users.insert(0, chosen)
+    _recently_picked_users = _recently_picked_users[:_MAX_RECENT_MEMORIZED]
+    
     items = get_recommendations(chosen, item_type, limit, base_url)
+    
+    # If the chosen user unexpectedly has no favorites of this type, try ONE more time with someone else
+    if not items:
+        remaining = [p for p in pool if p != chosen]
+        if remaining:
+            chosen = random.choice(remaining)
+            items = get_recommendations(chosen, item_type, limit, base_url)
 
-    if items is None:
+    if not items:
         return None
 
     return {

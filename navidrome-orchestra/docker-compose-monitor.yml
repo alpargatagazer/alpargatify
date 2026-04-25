@@ -33,7 +33,7 @@ services:
       retries: 3
 
   prometheus:
-    image: prom/prometheus:v3.10.0
+    image: prom/prometheus:v3.11.2
     user: ${PUID}:${PGID}
     profiles: [ "monitoring" ]
     container_name: prometheus
@@ -65,7 +65,7 @@ services:
       retries: 3
 
   node-exporter:
-    image: prom/node-exporter:v1.10.2
+    image: prom/node-exporter:v1.11.1
     profiles: [ "monitoring" ]
     container_name: node-exporter
     labels:

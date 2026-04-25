@@ -976,5 +976,5 @@ class NavidromeClient:
             return None
 
         except Exception as e:
-            logger.warning(f"Error checking last login for '{username}': {e}")
-            return None
+            logger.error(f"Error checking last login for '{username}': {e}")
+            raise e

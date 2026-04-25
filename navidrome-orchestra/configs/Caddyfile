@@ -61,12 +61,11 @@
 }
 
 <protocol>://picard.<domain> {
+    basicauth {
+        <picard_admin_user> <picard_caddy_password_hash>
+    }
     route {
-        reverse_proxy https://picard:5800 {
-            transport http {
-                tls_insecure_skip_verify
-            }
-        }
+        reverse_proxy picard:5800
     }
 }
 

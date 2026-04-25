@@ -1,11 +1,17 @@
+import os
+import sys
 import unittest
 from unittest.mock import patch, MagicMock
 
-import recommendations
+# Add project root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+
+import user_activity as recommendations
 
 class TestRecommendations(unittest.TestCase):
 
-    @patch("recommendations.ensure_user_synced", return_value=True)
+    @patch("user_activity.ensure_user_synced", return_value=True)
     @patch("credentials_db.get_starred_items")
     def test_get_recommendations(self, mock_get_starred, mock_ensure):
         # Mock 25 songs
@@ -16,8 +22,8 @@ class TestRecommendations(unittest.TestCase):
         self.assertIsNotNone(results)
         self.assertEqual(len(results), 20) # Bounded by limit limit
 
-    @patch("credentials_db.list_users", return_value=["user1", "user2", "user3"])
-    @patch("recommendations.get_recommendations", return_value=[{"id": "1"}])
+    @patch("user_activity.validate_and_get_users", return_value=["user1", "user2", "user3"])
+    @patch("user_activity.get_recommendations", return_value=[{"id": "1"}])
     def test_get_random_user_excludes_self(self, mock_get_rec, mock_list):
         from unittest.mock import ANY
         # Exclude user1, should only pick user2 or user3
